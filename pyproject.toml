@@ -1,0 +1,50 @@
+[project]
+name = "support-ticket-assistant"
+version = "0.1.0"
+description = "Human-in-the-loop support-ticket assistant for a financial institution (LangGraph + MCP + Streamlit)."
+requires-python = ">=3.12"
+# Runtime dependencies are added incrementally as each task needs them (SPEC §13:
+# ask before adding a new dependency). Task 1 only needs config loading.
+dependencies = [
+    "pydantic>=2,<3",
+    "pydantic-settings>=2,<3",
+]
+
+[dependency-groups]
+# Dev/tooling deps managed by uv (SPEC §9: black, ruff, mypy, pytest).
+dev = [
+    "black>=24",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "pytest>=8",
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.isort]
+# Our own service packages, so imports group as first-party (extend per service).
+known-first-party = ["app"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+# Makes mypy understand Pydantic models/BaseSettings (env-populated fields are not
+# required positional args; validators, aliases, etc. are typed correctly).
+plugins = ["pydantic.mypy"]
+# Each service is a separate import root; extend as services are added.
+mypy_path = "services/api"
+explicit_package_bases = true
+
+[tool.pytest.ini_options]
+# Services are independent import roots. Extend this list as tasks add services.
+pythonpath = ["services/api"]
+testpaths = ["services"]
