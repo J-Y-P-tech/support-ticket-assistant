@@ -61,9 +61,7 @@ def save_draft(
 
 
 @mcp.tool()
-def update_status(
-    ticket_id: int, status: str, actor: str | None = None
-) -> dict[str, Any] | None:
+def update_status(ticket_id: int, status: str, actor: str | None = None) -> dict[str, Any] | None:
     """Transition a ticket's status (cannot set Resolved; see record_sent_reply)."""
     with db.connect_from_env() as conn:
         return db.update_status(conn, ticket_id=ticket_id, status=status, actor=actor)
@@ -73,9 +71,7 @@ def update_status(
 def record_sent_reply(ticket_id: int, reply: str, rep_id: str) -> dict[str, Any] | None:
     """Record a rep-sent reply, resolving the case (requires a rep-action marker)."""
     with db.connect_from_env() as conn:
-        return db.record_sent_reply(
-            conn, ticket_id=ticket_id, reply=reply, rep_id=rep_id
-        )
+        return db.record_sent_reply(conn, ticket_id=ticket_id, reply=reply, rep_id=rep_id)
 
 
 def main() -> None:

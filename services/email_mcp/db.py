@@ -57,14 +57,18 @@ def connect_from_env() -> Connection:
 
     email_mcp is the only component with these credentials (SPEC §6). Defaults
     target the docker-compose `postgres` service; every value is overridable.
+
+    Parameters are passed as keywords rather than a `postgresql://` URL so a
+    password containing URL-special characters (`@`, `/`, `:`, `#`) can't corrupt
+    the connection string.
     """
-    dsn = (
-        f"postgresql://{os.environ['POSTGRES_USER']}:{os.environ['POSTGRES_PASSWORD']}"
-        f"@{os.environ.get('POSTGRES_HOST', 'postgres')}"
-        f":{os.environ.get('POSTGRES_PORT', '5432')}"
-        f"/{os.environ['POSTGRES_DB']}"
+    return psycopg.connect(
+        user=os.environ["POSTGRES_USER"],
+        password=os.environ["POSTGRES_PASSWORD"],
+        host=os.environ.get("POSTGRES_HOST", "postgres"),
+        port=os.environ.get("POSTGRES_PORT", "5432"),
+        dbname=os.environ["POSTGRES_DB"],
     )
-    return psycopg.connect(dsn)
 
 
 def apply_migrations(conn: Connection) -> None:
@@ -211,9 +215,7 @@ def update_status(
         "UPDATE tickets SET status = %s, updated_at = now() WHERE id = %s",
         (status, ticket_id),
     )
-    _record_audit(
-        conn, ticket_id, "status_changed", actor=actor, detail={"to": status}
-    )
+    _record_audit(conn, ticket_id, "status_changed", actor=actor, detail={"to": status})
     conn.commit()
     return get_ticket(conn, ticket_id)
 

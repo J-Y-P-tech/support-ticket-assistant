@@ -17,8 +17,7 @@ def test_migrations_create_all_owned_tables(conn: Connection) -> None:
     """Every table email_mcp owns exists in the public schema after migration."""
     with conn.cursor() as cur:
         cur.execute(
-            "SELECT table_name FROM information_schema.tables "
-            "WHERE table_schema = 'public'"
+            "SELECT table_name FROM information_schema.tables " "WHERE table_schema = 'public'"
         )
         present = {row[0] for row in cur.fetchall()}
 

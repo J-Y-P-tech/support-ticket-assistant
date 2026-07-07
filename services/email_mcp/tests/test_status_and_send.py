@@ -12,9 +12,19 @@ from __future__ import annotations
 import pytest
 from psycopg import Connection
 
+import db
 from app.schemas.enums import TicketStatus
 
-import db
+
+def test_valid_statuses_match_shared_enum() -> None:
+    """`db._VALID_STATUSES` must stay in lockstep with the shared `TicketStatus`.
+
+    `db.py` re-declares the status set as plain strings so it stays decoupled from
+    `app.schemas` at runtime (the MCP boundary carries JSON). That duplication can
+    silently drift: adding a status to the enum without updating `db.py` would make
+    this service reject the new status with no other test failing. This guards it.
+    """
+    assert db._VALID_STATUSES == {status.value for status in TicketStatus}
 
 
 def test_update_status_transitions_and_records_audit(conn: Connection) -> None:
@@ -25,6 +35,7 @@ def test_update_status_transitions_and_records_audit(conn: Connection) -> None:
         conn, ticket_id=ticket["id"], status=TicketStatus.TRIAGED, actor="system"
     )
 
+    assert updated is not None
     assert updated["status"] == TicketStatus.TRIAGED
     events = [entry["event"] for entry in db.get_audit_trail(conn, ticket["id"])]
     assert "status_changed" in events
@@ -63,6 +74,7 @@ def test_record_sent_reply_with_rep_marker_resolves(conn: Connection) -> None:
         rep_id="rep-42",
     )
 
+    assert resolved is not None
     assert resolved["status"] == TicketStatus.RESOLVED
     assert resolved["reply"] == "Here is how to fix it."
     trail = db.get_audit_trail(conn, ticket["id"])
@@ -72,9 +84,7 @@ def test_record_sent_reply_with_rep_marker_resolves(conn: Connection) -> None:
 def test_record_sent_reply_reply_is_visible_on_lookup(conn: Connection) -> None:
     """After a send, the final reply is visible via a normal ticket load (§4.8)."""
     ticket = db.create_ticket(conn, message="please help")
-    db.record_sent_reply(
-        conn, ticket_id=ticket["id"], reply="All sorted for you.", rep_id="rep-7"
-    )
+    db.record_sent_reply(conn, ticket_id=ticket["id"], reply="All sorted for you.", rep_id="rep-7")
 
     reloaded = db.get_ticket(conn, ticket["id"])
     assert reloaded is not None
@@ -87,9 +97,7 @@ def test_record_sent_reply_without_rep_marker_refuses(conn: Connection) -> None:
     ticket = db.create_ticket(conn, message="please help")
 
     with pytest.raises(ValueError):
-        db.record_sent_reply(
-            conn, ticket_id=ticket["id"], reply="auto reply", rep_id=""
-        )
+        db.record_sent_reply(conn, ticket_id=ticket["id"], reply="auto reply", rep_id="")
 
     # The case must remain unresolved and unmodified.
     reloaded = db.get_ticket(conn, ticket["id"])

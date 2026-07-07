@@ -11,11 +11,10 @@ from __future__ import annotations
 
 from psycopg import Connection
 
+import db
 from app.schemas.draft import Draft
 from app.schemas.enums import TicketStatus
 from app.schemas.ticket import QueueRow, TicketRead
-
-import db
 
 
 def test_create_ticket_starts_new_with_zero_padded_code(conn: Connection) -> None:

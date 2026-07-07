@@ -6,7 +6,7 @@ Order is dependency-correct; do not start a task before its dependencies are che
 ## Phase 0 — Foundation & scaffold
 - [x] **1.** Repo scaffold, config, Compose skeleton (postgres only) — *deps: none*
 - [x] **2.** Shared Pydantic v2 schemas — *deps: 1*
-- [ ] **3.** email_mcp: schema + migrations + ticket CRUD tools (STATE ROOT) — *deps: 1,2*
+- [x] **3.** email_mcp: schema + migrations + ticket CRUD tools (STATE ROOT) — *deps: 1,2*
 - [ ] **Checkpoint A** — foundation: lint/test green, migrations + email_mcp contract tests pass
 
 ## Phase 1 — Walking skeleton (no AI)
