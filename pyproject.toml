@@ -8,6 +8,9 @@ requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2,<3",
     "pydantic-settings>=2,<3",
+    # email_mcp (Task 3): Postgres driver (plain SQL) + official MCP SDK.
+    "psycopg[binary]>=3,<4",
+    "mcp>=1,<2",
 ]
 
 [dependency-groups]
@@ -17,6 +20,8 @@ dev = [
     "ruff>=0.6",
     "mypy>=1.11",
     "pytest>=8",
+    # email_mcp contract tests run against a throwaway Postgres container (Task 3).
+    "testcontainers[postgres]>=4,<5",
 ]
 
 [tool.black]
@@ -32,7 +37,8 @@ select = ["E", "F", "I", "UP", "B"]
 
 [tool.ruff.lint.isort]
 # Our own service packages, so imports group as first-party (extend per service).
-known-first-party = ["app"]
+# `db`/`server` are email_mcp's top-level modules (Task 3).
+known-first-party = ["app", "db", "server"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -41,10 +47,12 @@ strict = true
 # required positional args; validators, aliases, etc. are typed correctly).
 plugins = ["pydantic.mypy"]
 # Each service is a separate import root; extend as services are added.
-mypy_path = "services/api"
+mypy_path = ["services/api", "services/email_mcp"]
 explicit_package_bases = true
 
 [tool.pytest.ini_options]
 # Services are independent import roots. Extend this list as tasks add services.
-pythonpath = ["services/api"]
+# services/api provides `app.schemas` (shared contract types the email_mcp
+# contract tests validate against); services/email_mcp provides `db`/`server`.
+pythonpath = ["services/api", "services/email_mcp"]
 testpaths = ["services"]

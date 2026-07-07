@@ -24,8 +24,8 @@ test: ## Run the unit/contract/workflow test suite (pytest; fake LLM, no model)
 eval: ## Run the AI eval + red-team suites
 	@echo "eval: implemented in Task 29 (evals/ golden + red-team suites)."
 
-migrate: ## Apply DB migrations via email_mcp
-	@echo "migrate: implemented in Task 3 (email_mcp plain-SQL migrations)."
+migrate: ## Apply DB migrations via email_mcp (reads POSTGRES_* from the env/.env)
+	uv run python services/email_mcp/migrate.py
 
 seed: ## Load mock-KB answers + sample tickets
 	@echo "seed: implemented in Tasks 3/7 (sample tickets + mock_kb data)."
