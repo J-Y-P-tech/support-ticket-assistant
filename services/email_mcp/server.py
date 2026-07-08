@@ -37,10 +37,22 @@ def create_ticket(message: str, attachments: list[str] | None = None) -> dict[st
 
 
 @mcp.tool()
-def fetch_new_tickets() -> list[dict[str, Any]]:
-    """Return the New (untriaged) tickets awaiting processing."""
+def fetch_new_tickets(
+    limit: int = 50,
+    after_created_at: str | None = None,
+    after_id: int | None = None,
+) -> list[dict[str, Any]]:
+    """Return one keyset page of New tickets, oldest first (paged, never the whole table).
+
+    `after_created_at` + `after_id` are the `(created_at, id)` of the last row the
+    caller already has; pass both to fetch the following page. They travel as two
+    scalars because the MCP boundary carries JSON, not tuples.
+    """
+    after: tuple[str, int] | None = None
+    if after_created_at is not None and after_id is not None:
+        after = (after_created_at, after_id)
     with db.connect_from_env() as conn:
-        return db.fetch_new_tickets(conn)
+        return db.fetch_new_tickets(conn, limit=limit, after=after)
 
 
 @mcp.tool()

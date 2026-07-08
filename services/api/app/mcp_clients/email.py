@@ -97,9 +97,20 @@ class EmailMCPClient:
             await self._call("get_ticket_by_code", {"reference_code": reference_code})
         )
 
-    async def fetch_new_tickets(self) -> list[dict[str, Any]]:
-        """Return the New (untriaged) tickets awaiting the rep queue."""
-        payload = await self._call("fetch_new_tickets", {})
+    async def fetch_new_tickets(
+        self, *, limit: int = 50, after: tuple[str, int] | None = None
+    ) -> list[dict[str, Any]]:
+        """Return one keyset page of the New (untriaged) rep queue.
+
+        `after` is the `(created_at, id)` of the last row already seen; passed as
+        two scalars over the MCP boundary. Each returned row includes `created_at`
+        so the route can build the next-page cursor.
+        """
+        arguments: dict[str, Any] = {"limit": limit}
+        if after is not None:
+            arguments["after_created_at"] = after[0]
+            arguments["after_id"] = after[1]
+        payload = await self._call("fetch_new_tickets", arguments)
         return cast("list[dict[str, Any]]", payload)
 
 

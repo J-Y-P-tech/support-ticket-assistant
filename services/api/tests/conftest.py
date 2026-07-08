@@ -84,10 +84,22 @@ class FakeEmailClient:
         self.calls.append(("get_ticket", ticket_id))
         return self.tickets_by_id.get(ticket_id)
 
-    async def fetch_new_tickets(self) -> list[dict[str, Any]]:
-        """Return the configured queue rows (New/untriaged tickets)."""
-        self.calls.append(("fetch_new_tickets",))
-        return list(self.queue_rows)
+    async def fetch_new_tickets(
+        self, *, limit: int = 50, after: tuple[str, int] | None = None
+    ) -> list[dict[str, Any]]:
+        """Return one keyset page of the configured queue rows.
+
+        Emulates email_mcp's keyset paging so route tests exercise the real
+        contract: rows are ordered by `(created_at, id)`, a cursor drops
+        everything up to and including that key, and `limit` caps the page. The
+        call (with its `limit`/`after`) is recorded so tests can assert the route
+        forwarded the cap and cursor it computed.
+        """
+        self.calls.append(("fetch_new_tickets", limit, after))
+        ordered = sorted(self.queue_rows, key=lambda r: (r["created_at"], r["id"]))
+        if after is not None:
+            ordered = [r for r in ordered if (r["created_at"], r["id"]) > after]
+        return ordered[:limit]
 
 
 @pytest.fixture

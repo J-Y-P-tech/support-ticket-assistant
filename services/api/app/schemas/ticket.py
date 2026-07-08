@@ -50,3 +50,16 @@ class QueueRow(BaseModel):
     status: TicketStatus
     urgency: Urgency | None = None
     category: Category | None = None
+
+
+class QueuePage(BaseModel):
+    """One keyset page of the rep queue (plan Task 6).
+
+    `next_cursor` is the `<created_at>,<id>` to pass back as `after` for the
+    following page; it is `None` on the final (short) page, so the client knows
+    when to stop. The page size is capped server-side, so a client can never pull
+    the whole table in one request.
+    """
+
+    items: list[QueueRow]
+    next_cursor: str | None = None

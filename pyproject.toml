@@ -15,6 +15,10 @@ dependencies = [
     # the SDK's streamable-HTTP transport (httpx, pulled in transitively by mcp).
     "fastapi>=0.115,<1",
     "uvicorn[standard]>=0.30,<1",
+    # frontend (Task 6): Streamlit UI (SPEC §8) + explicit httpx for its typed api
+    # client (already transitive via mcp; pinned here as a direct dependency).
+    "streamlit>=1.38,<2",
+    "httpx>=0.27,<1",
 ]
 
 [dependency-groups]
@@ -50,7 +54,8 @@ extend-immutable-calls = ["fastapi.Depends", "fastapi.Security"]
 # Our own service packages, so imports group as first-party (extend per service).
 # `db`/`server` are email_mcp's top-level modules (Task 3). `tests` is imported
 # as a package by the api route tests (e.g. `from tests.conftest import ...`).
-known-first-party = ["app", "db", "server", "tests"]
+# `api_client`/`config`/`formatting`/`views` are the frontend's top-level modules (Task 6).
+known-first-party = ["app", "db", "server", "tests", "api_client", "config", "formatting", "views"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -59,7 +64,7 @@ strict = true
 # required positional args; validators, aliases, etc. are typed correctly).
 plugins = ["pydantic.mypy"]
 # Each service is a separate import root; extend as services are added.
-mypy_path = ["services/api", "services/email_mcp"]
+mypy_path = ["services/api", "services/email_mcp", "services/frontend"]
 explicit_package_bases = true
 
 # testcontainers ships no type stubs / py.typed marker; used only in the
@@ -69,11 +74,19 @@ explicit_package_bases = true
 module = ["testcontainers.*"]
 ignore_missing_imports = true
 
+# Streamlit's type coverage is partial; the frontend's thin views/entry import it
+# but hold no tested logic (that lives in the type-checked api_client/formatting/
+# config modules — SPEC §9). Silence its missing-stub noise without loosening
+# strictness elsewhere.
+[[tool.mypy.overrides]]
+module = ["streamlit.*"]
+ignore_missing_imports = true
+
 [tool.pytest.ini_options]
 # Services are independent import roots. Extend this list as tasks add services.
 # services/api provides `app.schemas` (shared contract types the email_mcp
 # contract tests validate against); services/email_mcp provides `db`/`server`.
-pythonpath = ["services/api", "services/email_mcp"]
+pythonpath = ["services/api", "services/email_mcp", "services/frontend"]
 testpaths = ["services"]
 # The api email MCP client is async (SPEC §11); auto mode lets `async def` tests
 # run without a per-test marker.

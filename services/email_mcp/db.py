@@ -130,15 +130,42 @@ def create_ticket(
     return row
 
 
-def fetch_new_tickets(conn: Connection) -> list[dict[str, Any]]:
-    """Return New (untriaged) tickets as `QueueRow`-shaped dicts, oldest first."""
+def fetch_new_tickets(
+    conn: Connection,
+    *,
+    limit: int = 50,
+    after: tuple[str, int] | None = None,
+) -> list[dict[str, Any]]:
+    """Return one keyset page of New (untriaged) tickets, oldest first.
+
+    Paged on the stable `(created_at, id)` key so the rep queue can never pull the
+    whole table in one call (the Task-4 unbounded-queue gap) and so paging is
+    deterministic: `limit` caps the page, and `after` — the `(created_at, id)` of
+    the last row a caller has already seen — resumes strictly past it, giving no
+    duplicated or skipped tickets even though every row shares the `New` status.
+    `id` breaks ties when two tickets share a `created_at`, keeping the order total.
+
+    `created_at` is included in each row (ISO-8601) so the caller can build the
+    cursor for the next page; the shared `QueueRow` schema ignores the extra field.
+    """
+    sql = (
+        "SELECT id, reference_code, status, urgency, category, created_at "
+        "FROM tickets WHERE status = %s"
+    )
+    params: list[Any] = [_STATUS_NEW]
+    if after is not None:
+        # Row-value comparison: the next row after the (created_at, id) cursor.
+        sql += " AND (created_at, id) > (%s::timestamptz, %s)"
+        params.extend(after)
+    sql += " ORDER BY created_at, id LIMIT %s"
+    params.append(limit)
+
     with conn.cursor(row_factory=dict_row) as cur:
-        cur.execute(
-            "SELECT id, reference_code, status, urgency, category "
-            "FROM tickets WHERE status = %s ORDER BY created_at, id",
-            (_STATUS_NEW,),
-        )
-        return cur.fetchall()
+        cur.execute(sql, params)
+        rows = cur.fetchall()
+    for row in rows:
+        row["created_at"] = _iso(row["created_at"])
+    return rows
 
 
 def get_ticket(conn: Connection, ticket_id: int) -> dict[str, Any] | None:

@@ -11,7 +11,7 @@ Order is dependency-correct; do not start a task before its dependencies are che
 
 ## Phase 1 — Walking skeleton (no AI)
 - [x] **4.** api: email MCP client + core routes (submit/lookup/queue) + auth — *deps: 3*
-- [ ] **5.** reference-code generate/lookup util — *deps: 2*
+- [x] **5.** reference-code generate/lookup util — *deps: 2*
 - [ ] **6.** frontend: api_client + 3 views (queue list-only) + AppTest + queue pagination (closes Task-4 unbounded-queue gap) — *deps: 4*
 - [ ] **Checkpoint B** — walking skeleton: submit → store → rep queue → lookup, no AI
 

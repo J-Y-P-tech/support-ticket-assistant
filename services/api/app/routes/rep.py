@@ -12,22 +12,61 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.mcp_clients.email import EmailMCPClient, get_email_client
-from app.schemas.ticket import QueueRow
+from app.schemas.ticket import QueuePage, QueueRow
 from app.security import require_auth
+
+# Server-side page sizing (plan Task 6, closing the Task-4 unbounded-queue gap):
+# a default page and a hard ceiling the client can never exceed, so no request can
+# pull the whole New queue in one call.
+DEFAULT_QUEUE_LIMIT = 50
+MAX_QUEUE_LIMIT = 200
 
 router = APIRouter(prefix="/rep", dependencies=[Depends(require_auth)])
 
 
-@router.get("/queue", response_model=list[QueueRow])
+def _parse_cursor(after: str | None) -> tuple[str, int] | None:
+    """Parse an `after` cursor (`<created_at>,<id>`) into `(created_at, id)`.
+
+    `None` (no cursor) means the first page. A present-but-malformed cursor is a
+    client mistake, surfaced as 400 rather than a 500 or a silent first page.
+    """
+    if after is None:
+        return None
+    created_at, _, id_str = after.rpartition(",")
+    if not created_at or not id_str:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid cursor")
+    try:
+        return created_at, int(id_str)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid cursor"
+        ) from None
+
+
+@router.get("/queue", response_model=QueuePage)
 async def rep_queue(
+    limit: int = Query(default=DEFAULT_QUEUE_LIMIT),
+    after: str | None = Query(default=None),
     email: EmailMCPClient = Depends(get_email_client),
-) -> list[QueueRow]:
-    """Return the New tickets as queue rows for the rep workspace."""
-    rows = await email.fetch_new_tickets()
-    return [QueueRow.model_validate(row) for row in rows]
+) -> QueuePage:
+    """Return one keyset page of the New-ticket rep queue.
+
+    `limit` is clamped to `[1, MAX_QUEUE_LIMIT]` so an oversized ask is capped
+    rather than rejected; `after` resumes past the last row already seen. A full
+    page yields a `next_cursor` (more may remain); a short page yields `None`.
+    """
+    capped = min(max(limit, 1), MAX_QUEUE_LIMIT)
+    cursor = _parse_cursor(after)
+    rows = await email.fetch_new_tickets(limit=capped, after=cursor)
+    items = [QueueRow.model_validate(row) for row in rows]
+    next_cursor = None
+    if len(rows) == capped and rows:
+        last = rows[-1]
+        next_cursor = f"{last['created_at']},{last['id']}"
+    return QueuePage(items=items, next_cursor=next_cursor)
 
 
 @router.get("/tickets/{ticket_id}")

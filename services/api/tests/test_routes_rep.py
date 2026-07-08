@@ -12,27 +12,82 @@ from fastapi.testclient import TestClient
 from tests.conftest import FakeEmailClient
 
 
-def test_queue_returns_new_tickets(
+def _queue_row(seq: int) -> dict[str, str | int | None]:
+    """Build a New queue row with an ordered `created_at`/`id` for keyset tests."""
+    return {
+        "id": seq,
+        "reference_code": f"TKT-{seq:04d}",
+        "status": "New",
+        "urgency": None,
+        "category": None,
+        "created_at": f"2026-07-07T00:00:{seq:02d}+00:00",
+    }
+
+
+def test_queue_returns_new_tickets_in_a_paged_envelope(
     client: TestClient, email_client: FakeEmailClient, auth_headers: dict[str, str]
 ) -> None:
-    """The queue endpoint returns the New/untriaged tickets as queue rows."""
-    email_client.queue_rows = [
-        {
-            "id": 1,
-            "reference_code": "TKT-0001",
-            "status": "New",
-            "urgency": None,
-            "category": None,
-        }
-    ]
+    """The queue endpoint returns New tickets under `items`, with a `next_cursor` key."""
+    email_client.queue_rows = [_queue_row(1)]
 
     response = client.get("/rep/queue", headers=auth_headers)
 
     assert response.status_code == 200
-    rows = response.json()
-    assert len(rows) == 1
-    assert rows[0]["reference_code"] == "TKT-0001"
-    assert rows[0]["status"] == "New"
+    body = response.json()
+    assert [row["reference_code"] for row in body["items"]] == ["TKT-0001"]
+    assert body["items"][0]["status"] == "New"
+    # A single row is a short (final) page, so there is no next cursor.
+    assert body["next_cursor"] is None
+
+
+def test_queue_caps_results_at_the_hard_max(
+    client: TestClient, email_client: FakeEmailClient, auth_headers: dict[str, str]
+) -> None:
+    """Even asking for far more than the max returns at most the configured cap."""
+    from app.routes.rep import MAX_QUEUE_LIMIT
+
+    email_client.queue_rows = [_queue_row(n) for n in range(1, MAX_QUEUE_LIMIT + 50)]
+
+    response = client.get("/rep/queue", params={"limit": 100_000}, headers=auth_headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body["items"]) == MAX_QUEUE_LIMIT
+    # A full page means more may remain, so a cursor is handed back.
+    assert body["next_cursor"] is not None
+    # The route forwarded the capped limit (never the client's oversized ask).
+    assert email_client.calls[-1] == ("fetch_new_tickets", MAX_QUEUE_LIMIT, None)
+
+
+def test_queue_next_page_has_no_overlap_with_first(
+    client: TestClient, email_client: FakeEmailClient, auth_headers: dict[str, str]
+) -> None:
+    """Following `next_cursor` yields the following tickets with no dupes or gaps."""
+    email_client.queue_rows = [_queue_row(n) for n in range(1, 6)]
+
+    first = client.get("/rep/queue", params={"limit": 2}, headers=auth_headers).json()
+    second = client.get(
+        "/rep/queue",
+        params={"limit": 2, "after": first["next_cursor"]},
+        headers=auth_headers,
+    ).json()
+
+    first_codes = [row["reference_code"] for row in first["items"]]
+    second_codes = [row["reference_code"] for row in second["items"]]
+    assert first_codes == ["TKT-0001", "TKT-0002"]
+    assert second_codes == ["TKT-0003", "TKT-0004"]
+    assert set(first_codes).isdisjoint(second_codes)
+
+
+def test_queue_malformed_cursor_is_rejected(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    """A cursor that isn't `<created_at>,<id>` is a client error, not a 500."""
+    response = client.get(
+        "/rep/queue", params={"after": "not-a-valid-cursor"}, headers=auth_headers
+    )
+
+    assert response.status_code == 400
 
 
 def test_queue_requires_auth(client: TestClient) -> None:
