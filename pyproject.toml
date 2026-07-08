@@ -55,7 +55,8 @@ extend-immutable-calls = ["fastapi.Depends", "fastapi.Security"]
 # `db`/`server` are email_mcp's top-level modules (Task 3). `tests` is imported
 # as a package by the api route tests (e.g. `from tests.conftest import ...`).
 # `api_client`/`config`/`formatting`/`views` are the frontend's top-level modules (Task 6).
-known-first-party = ["app", "db", "server", "tests", "api_client", "config", "formatting", "views"]
+# `kb_search`/`providers` are kb_mcp's top-level module + package (Task 8).
+known-first-party = ["app", "db", "server", "kb_search", "providers", "tests", "api_client", "config", "formatting", "views"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -64,7 +65,7 @@ strict = true
 # required positional args; validators, aliases, etc. are typed correctly).
 plugins = ["pydantic.mypy"]
 # Each service is a separate import root; extend as services are added.
-mypy_path = ["services/api", "services/email_mcp", "services/frontend"]
+mypy_path = ["services/api", "services/email_mcp", "services/kb_mcp", "services/frontend"]
 explicit_package_bases = true
 
 # testcontainers ships no type stubs / py.typed marker; used only in the
@@ -84,9 +85,10 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 # Services are independent import roots. Extend this list as tasks add services.
-# services/api provides `app.schemas` (shared contract types the email_mcp
-# contract tests validate against); services/email_mcp provides `db`/`server`.
-pythonpath = ["services/api", "services/email_mcp", "services/frontend"]
+# services/api provides `app.schemas` (shared contract types the email_mcp and
+# kb_mcp contract tests validate against); services/email_mcp provides `db`/`server`;
+# services/kb_mcp provides `kb_search`/`providers`.
+pythonpath = ["services/api", "services/email_mcp", "services/kb_mcp", "services/frontend"]
 testpaths = ["services"]
 # The api email MCP client is async (SPEC §11); auto mode lets `async def` tests
 # run without a per-test marker.

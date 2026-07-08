@@ -1,0 +1,7 @@
+{
+  "id": "kb-two-factor",
+  "title": "Two-factor verification codes aren't arriving",
+  "category": "account_access",
+  "keywords": ["two", "factor", "2fa", "verification", "code", "otp", "sms", "authenticator", "text", "security", "login", "log"],
+  "text": "If your verification code isn't arriving by text, make sure the phone number on your profile is current and has signal, then request a new code (each code expires after 10 minutes). Codes can be delayed by carrier issues, so wait a minute before requesting another to avoid invalidating the first. If you use an authenticator app, confirm your phone's clock is set to update automatically, since a wrong clock makes app codes fail. You can also switch verification methods or update your number in Security settings."
+}

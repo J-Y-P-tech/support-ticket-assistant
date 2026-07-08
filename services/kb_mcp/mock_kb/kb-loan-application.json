@@ -1,0 +1,7 @@
+{
+  "id": "kb-loan-application",
+  "title": "Check the status of a loan or credit application",
+  "category": "loans_credit",
+  "keywords": ["loan", "credit", "application", "apply", "status", "approval", "approved", "pending", "review", "limit", "line", "borrow"],
+  "text": "You can track a loan or credit application in the app under Loans & Credit, where each application shows a status of Submitted, In Review, Approved, or Declined. Most decisions are automated and completed within one to two business days, though some applications need a manual review that takes longer. If more information is required, you'll get a notification listing exactly what to upload. We can't share a decision before the review completes, but support can confirm your application was received."
+}

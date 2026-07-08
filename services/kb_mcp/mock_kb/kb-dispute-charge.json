@@ -1,0 +1,7 @@
+{
+  "id": "kb-dispute-charge",
+  "title": "Dispute an unauthorized or fraudulent charge",
+  "category": "transaction_dispute_fraud",
+  "keywords": ["dispute", "unauthorized", "fraud", "fraudulent", "charge", "chargeback", "transaction", "scam", "unrecognized", "claim", "report"],
+  "text": "If you see a charge you didn't make, freeze the affected card first to stop further activity, then open the transaction in the app and choose \"Dispute this charge.\" Tell us whether you recognize the merchant and add any details you have. We'll open a case, may issue a provisional credit while we investigate, and aim to resolve most disputes within 10 business days (complex cases can take longer). Keep any receipts or messages related to the charge in case we need them."
+}

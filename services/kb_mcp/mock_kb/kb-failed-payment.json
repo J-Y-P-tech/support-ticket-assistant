@@ -1,0 +1,7 @@
+{
+  "id": "kb-failed-payment",
+  "title": "A payment or transfer failed to go through",
+  "category": "payments_billing",
+  "keywords": ["payment", "transfer", "failed", "fail", "bounced", "returned", "send", "money", "transaction", "insufficient", "reversed"],
+  "text": "Payments and transfers can fail because of an insufficient available balance, an incorrect recipient detail, or exceeding a transfer limit. Confirm the recipient's account information and that you have enough available (not just pending) balance, then try again. If funds left your account but didn't arrive, they're normally returned automatically within 1 to 3 business days. For a payment that's stuck longer than that, contact support with the date and amount so we can trace it."
+}

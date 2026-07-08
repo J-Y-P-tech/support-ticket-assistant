@@ -1,0 +1,7 @@
+{
+  "id": "kb-download-statements",
+  "title": "Find and download your account statements",
+  "category": "general_inquiry",
+  "keywords": ["statement", "statements", "download", "pdf", "document", "documents", "transaction", "history", "export", "records", "monthly", "balance"],
+  "text": "Monthly statements are available in the app under Documents, then Statements, where you can view or download any period as a PDF. You can also export a custom date range of your transaction history to a CSV or PDF file from the same screen. Statements are generated a few days after each billing cycle closes. If a statement you need is missing, or you require an older record than what's shown, contact support and we can retrieve it for you."
+}

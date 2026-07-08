@@ -1,0 +1,7 @@
+{
+  "id": "kb-card-declined",
+  "title": "A card payment was declined",
+  "category": "card_issues",
+  "keywords": ["card", "declined", "decline", "payment", "transaction", "rejected", "failed", "purchase", "limit", "blocked", "charge"],
+  "text": "A declined card is usually caused by an insufficient available balance, hitting a daily spending limit, an expired card, or our fraud system flagging an unusual transaction. Check your available balance and the card's expiry date first. If everything looks right, the charge may have been held for review, so approve it from the security prompt in the app or contact support to confirm it was you. International or first-time merchants are the most common triggers for a precautionary decline."
+}

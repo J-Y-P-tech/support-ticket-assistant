@@ -1,0 +1,7 @@
+{
+  "id": "kb-pending-charge",
+  "title": "Understand a pending charge or hold on your account",
+  "category": "payments_billing",
+  "keywords": ["pending", "hold", "charge", "authorization", "posted", "transaction", "temporary", "duplicate", "preauthorization", "balance"],
+  "text": "A pending charge is an authorization the merchant placed to reserve funds; it isn't final, and your available balance drops until it posts or falls off. Hotels, gas stations, and car rentals often place larger temporary holds that release within a few days. If you see two pending entries for one purchase, one is usually a temporary hold that will disappear on its own. If a pending charge hasn't posted or cleared after 7 days, contact support and we'll check its status."
+}

@@ -1,0 +1,7 @@
+{
+  "id": "kb-app-error",
+  "title": "The app won't load, crashes, or shows an error",
+  "category": "technical_problem",
+  "keywords": ["app", "crash", "crashes", "error", "loading", "load", "freeze", "frozen", "bug", "technical", "update", "glitch", "broken", "screen"],
+  "text": "If the app won't load or keeps crashing, first fully close and reopen it, then confirm you're on the latest version from your app store, since most glitches are fixed by an update. If it still fails, check your internet connection, restart your device, and clear the app's cache in your phone settings. Persistent errors after that are worth reporting to support with the exact error message, your device model, and the app version so we can escalate to our technical team."
+}

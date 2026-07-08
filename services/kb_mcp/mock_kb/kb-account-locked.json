@@ -1,0 +1,7 @@
+{
+  "id": "kb-account-locked",
+  "title": "Your account is locked after too many sign-in attempts",
+  "category": "account_access",
+  "keywords": ["locked", "lock", "unlock", "account", "attempts", "sign", "signin", "login", "log", "blocked", "temporarily", "security"],
+  "text": "For your security, we temporarily lock an account after several failed sign-in attempts. The lock lifts automatically after 30 minutes, so no action is required. To get back in sooner, reset your password using the \"Forgot password\" link, which both verifies your identity and clears the lock. If you're still locked out after resetting, contact support so an agent can confirm your identity and unlock the account manually."
+}

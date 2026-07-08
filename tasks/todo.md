@@ -14,7 +14,7 @@ Order is dependency-correct; do not start a task before its dependencies are che
 - [x] **5.** reference-code generate/lookup util — *deps: 2*
 - [x] **6.** frontend: api_client + 3 views (queue list-only) + AppTest + queue pagination (closes Task-4 unbounded-queue gap) — *deps: 4*
 - [x] **7.** stack wiring: compose services (email_mcp/api/frontend) + api Dockerfile so the walking skeleton boots — *deps: 3,4,6*
-- [ ] **Checkpoint B** — walking skeleton: submit → store → rep queue → lookup, no AI
+- [x] **Checkpoint B** — walking skeleton: submit → store → rep queue → lookup, no AI
 
 ## Phase 2 — KB connector
 - [ ] **8.** kb_mcp: provider interface + MockKB + search tool + mock_kb data — *deps: 1,2*
@@ -38,6 +38,7 @@ Order is dependency-correct; do not start a task before its dependencies are che
 - [ ] **17.** LangGraph workflow + human interrupt + Postgres checkpointer + safety-invariant test — *deps: 3,11–16*
 - [ ] **18.** api: rep-action routes (edit/approve/reject/send) + finalize — *deps: 17*
 - [ ] **19.** frontend: rep workspace draft review — *deps: 18*
+  - follow-up (Checkpoint B review): views call `raise_for_status()` with no handling, so a 401/500 on submit or the rep queue surfaces as a raw Streamlit stack trace. Wrap the api calls in the three views (customer/check_my_case/rep_workspace) and show a friendly `st.error(...)` instead.
 - [ ] **Checkpoint C** — text pipeline end-to-end on FakeLLM, human gate enforced
 
 ## Phase 7 — Document digitization

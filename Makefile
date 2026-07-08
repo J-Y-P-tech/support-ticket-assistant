@@ -22,6 +22,7 @@ typecheck: ## Static type-check (mypy, strict; per service root)
 	# each root is checked in its own invocation. Extend this list per service.
 	uv run mypy services/api
 	uv run mypy services/email_mcp
+	uv run mypy services/kb_mcp
 	# Frontend: type-check the modules that hold logic (SPEC §9). app.py and views/
 	# are thin Streamlit surfaces (logic lives in these tested modules), so they are
 	# excluded here — this also keeps the frontend `app.py` module out of the run,
