@@ -11,13 +11,22 @@ establishes the tool surface and its behaviour.
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
 import db
 
-mcp = FastMCP("email_mcp")
+# Served over streamable-HTTP so the api (a separate container) can reach it over
+# the network (SPEC §6, api↔MCP over HTTP). Bind and path are configurable; the
+# defaults match `.env.example` (EMAIL_MCP_URL=http://email_mcp:8000/mcp).
+mcp = FastMCP(
+    "email_mcp",
+    host=os.environ.get("EMAIL_MCP_HOST", "0.0.0.0"),
+    port=int(os.environ.get("EMAIL_MCP_PORT", "8000")),
+    streamable_http_path="/mcp",
+)
 
 
 @mcp.tool()
@@ -39,6 +48,14 @@ def get_ticket(ticket_id: int) -> dict[str, Any]:
     """Return a ticket with its latest draft, or a neutral not-found result."""
     with db.connect_from_env() as conn:
         ticket = db.get_ticket(conn, ticket_id)
+    return ticket if ticket is not None else {"found": False}
+
+
+@mcp.tool()
+def get_ticket_by_code(reference_code: str) -> dict[str, Any]:
+    """Return a ticket by its reference code, or a neutral not-found result."""
+    with db.connect_from_env() as conn:
+        ticket = db.get_ticket_by_code(conn, reference_code)
     return ticket if ticket is not None else {"found": False}
 
 
@@ -75,8 +92,8 @@ def record_sent_reply(ticket_id: int, reply: str, rep_id: str) -> dict[str, Any]
 
 
 def main() -> None:
-    """Run the MCP server (stdio transport by default)."""
-    mcp.run()
+    """Run the MCP server over streamable-HTTP (SPEC §6: api↔MCP over HTTP)."""
+    mcp.run(transport="streamable-http")
 
 
 if __name__ == "__main__":

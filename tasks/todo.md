@@ -7,12 +7,12 @@ Order is dependency-correct; do not start a task before its dependencies are che
 - [x] **1.** Repo scaffold, config, Compose skeleton (postgres only) — *deps: none*
 - [x] **2.** Shared Pydantic v2 schemas — *deps: 1*
 - [x] **3.** email_mcp: schema + migrations + ticket CRUD tools (STATE ROOT) — *deps: 1,2*
-- [ ] **Checkpoint A** — foundation: lint/test green, migrations + email_mcp contract tests pass
+- [x] **Checkpoint A** — foundation: lint/test green, migrations + email_mcp contract tests pass
 
 ## Phase 1 — Walking skeleton (no AI)
 - [ ] **4.** api: email MCP client + core routes (submit/lookup/queue) + auth — *deps: 3*
 - [ ] **5.** reference-code generate/lookup util — *deps: 2*
-- [ ] **6.** frontend: api_client + 3 views (queue list-only) + AppTest — *deps: 4*
+- [ ] **6.** frontend: api_client + 3 views (queue list-only) + AppTest + queue pagination (closes Task-4 unbounded-queue gap) — *deps: 4*
 - [ ] **Checkpoint B** — walking skeleton: submit → store → rep queue → lookup, no AI
 
 ## Phase 2 — KB connector

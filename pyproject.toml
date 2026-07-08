@@ -11,6 +11,10 @@ dependencies = [
     # email_mcp (Task 3): Postgres driver (plain SQL) + official MCP SDK.
     "psycopg[binary]>=3,<4",
     "mcp>=1,<2",
+    # api (Task 4): FastAPI backend + ASGI server (SPEC §8). The MCP client uses
+    # the SDK's streamable-HTTP transport (httpx, pulled in transitively by mcp).
+    "fastapi>=0.115,<1",
+    "uvicorn[standard]>=0.30,<1",
 ]
 
 [dependency-groups]
@@ -22,6 +26,8 @@ dev = [
     "pytest>=8",
     # email_mcp contract tests run against a throwaway Postgres container (Task 3).
     "testcontainers[postgres]>=4,<5",
+    # api (Task 4): the email MCP client wrapper is async, so its unit tests are too.
+    "pytest-asyncio>=0.24,<1",
 ]
 
 [tool.black]
@@ -35,10 +41,16 @@ target-version = "py312"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+[tool.ruff.lint.flake8-bugbear]
+# `Depends()`/`Security()` in argument defaults is FastAPI's intended idiom, not a
+# B008 mutable-call bug; allow them so the api routes/deps read the standard way.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Security"]
+
 [tool.ruff.lint.isort]
 # Our own service packages, so imports group as first-party (extend per service).
-# `db`/`server` are email_mcp's top-level modules (Task 3).
-known-first-party = ["app", "db", "server"]
+# `db`/`server` are email_mcp's top-level modules (Task 3). `tests` is imported
+# as a package by the api route tests (e.g. `from tests.conftest import ...`).
+known-first-party = ["app", "db", "server", "tests"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -63,3 +75,6 @@ ignore_missing_imports = true
 # contract tests validate against); services/email_mcp provides `db`/`server`.
 pythonpath = ["services/api", "services/email_mcp"]
 testpaths = ["services"]
+# The api email MCP client is async (SPEC §11); auto mode lets `async def` tests
+# run without a per-test marker.
+asyncio_mode = "auto"

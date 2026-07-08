@@ -171,6 +171,24 @@ def get_ticket(conn: Connection, ticket_id: int) -> dict[str, Any] | None:
     return ticket
 
 
+def get_ticket_by_code(conn: Connection, reference_code: str) -> dict[str, Any] | None:
+    """Load one ticket by its reference code, or None if the code is unknown.
+
+    Reference codes come from their own sequence, so a code is not the ticket id
+    (SPEC §14); the api's customer-lookup route (SPEC §4.8) needs this to resolve
+    a `TKT-####` a customer typed. Matching is case- and whitespace-insensitive so
+    a lightly mistyped code still resolves; an unknown code returns a neutral None
+    (no enumeration leak), mirroring `get_ticket`.
+    """
+    normalized = reference_code.strip().upper()
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute("SELECT id FROM tickets WHERE reference_code = %s", (normalized,))
+        row = cur.fetchone()
+    if row is None:
+        return None
+    return get_ticket(conn, row["id"])
+
+
 def save_draft(
     conn: Connection,
     *,

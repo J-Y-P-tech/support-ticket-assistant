@@ -16,4 +16,7 @@ COPY services/email_mcp ./services/email_mcp
 # email_mcp modules (db.py, server.py) import as top-level modules.
 ENV PYTHONPATH=/app/services/email_mcp
 
+# Streamable-HTTP MCP endpoint (SPEC §6): the api reaches it at :8000/mcp.
+EXPOSE 8000
+
 CMD ["uv", "run", "python", "services/email_mcp/server.py"]

@@ -15,8 +15,13 @@ format: ## Auto-format the codebase (black)
 lint: ## Lint the codebase (ruff)
 	uv run ruff check .
 
-typecheck: ## Static type-check (mypy, strict)
-	uv run mypy services
+typecheck: ## Static type-check (mypy, strict; per service root)
+	# Each service is a separate import root (see pyproject mypy_path). Checking
+	# them in one `mypy services` run makes both services' `tests/conftest.py`
+	# resolve to the same module `tests.conftest` and mypy aborts on the clash, so
+	# each root is checked in its own invocation. Extend this list per service.
+	uv run mypy services/api
+	uv run mypy services/email_mcp
 
 test: ## Run the unit/contract/workflow test suite (pytest; fake LLM, no model)
 	uv run pytest

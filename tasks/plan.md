@@ -144,17 +144,28 @@ used by Task 4. (Small, extracted so route logic stays thin.)
 **Acceptance criteria:** deterministic formatting; case/whitespace-insensitive lookup; unknown →
 not-found sentinel. **Verification:** unit tests. **Dependencies:** Task 2. **Scope:** S.
 
-#### Task 6: frontend — api_client + 3 views (list-only)
+#### Task 6: frontend — api_client + 3 views (list-only) + queue pagination
 **Description:** `api_client.py` (typed HTTP to api, token from config); views: *Customer* (submit +
 attach), *Check my case* (code lookup), *Rep workspace* (queue table only — draft review comes in
 Task 18). AppTest headless harness.
+**Also close the Task-4 unbounded-queue gap here, where it naturally surfaces:** `GET /rep/queue`
+and email_mcp's `fetch_new_tickets` currently return *every* New ticket with no cap. Add
+pagination end-to-end — a `LIMIT`/`OFFSET` (keyset on `created_at, id` preferred) in
+`fetch_new_tickets`, `?limit=&offset=` (or a cursor) on the api route with a **server-side default
+and hard max** (e.g. default 50, max 200) so a client can never request the whole table, and a
+"next page" affordance in the rep queue view. (Not specified in SPEC; scoping decision confirmed
+2026-07-07.)
 **Acceptance criteria:**
 - [ ] Submitting a ticket in AppTest shows a returned reference code.
 - [ ] Looking up that code shows status `New`.
 - [ ] api_client tests pass against mocked HTTP.
-**Verification:** `make test` (frontend/tests: api_client mocked + AppTest submit/lookup).
+- [ ] `GET /rep/queue` caps results at the configured max even when more New tickets exist, and
+      paginates deterministically (stable order, no dupes/gaps across pages).
+**Verification:** `make test` (frontend/tests: api_client mocked + AppTest submit/lookup; api route
+test for the limit cap + a pagination boundary; email_mcp contract test for the paged query).
 **Dependencies:** Task 4. **Scope:** M. **Files:** `services/frontend/{app.py,views/,api_client.py,
-tests/,Dockerfile}`.
+tests/,Dockerfile}`, plus `services/api/app/routes/rep.py`, `services/api/app/mcp_clients/email.py`,
+`services/email_mcp/{db.py,server.py}` (pagination).
 
 > **Checkpoint B — Walking skeleton:** customer submit → stored → rep sees it in the queue →
 > customer looks it up by code, **with no AI in the loop**. All four containers talk. Review.
