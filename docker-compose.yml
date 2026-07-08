@@ -1,6 +1,13 @@
-# Docker Compose skeleton — postgres only (plan Task 1).
-# App services (api, kb_mcp, email_mcp, frontend) and langfuse are wired in later
-# tasks. Ollama is NOT containerized; services reach it via host.docker.internal.
+# Docker Compose — walking-skeleton stack (plan Task 7).
+# postgres + the three app services (email_mcp, api, frontend) needed for the
+# no-AI path: submit -> store -> rep queue -> lookup. kb_mcp and langfuse are
+# wired in later tasks. Ollama is NOT containerized; services reach it on the host
+# via host.docker.internal (Linux needs the host-gateway mapping added per service).
+#
+# All app services build from the repo root (context: .) because their Dockerfiles
+# COPY `pyproject.toml`/`uv.lock` and their `services/<name>` tree from there. They
+# read tokens/URLs from `.env` (env_file); values there already use the compose
+# service names (api, email_mcp) as hostnames.
 
 services:
   postgres:
@@ -19,6 +26,62 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+  email_mcp:
+    build:
+      context: .
+      dockerfile: services/email_mcp/Dockerfile
+    restart: unless-stopped
+    # The sole DB owner (SPEC §6): reads POSTGRES_* from .env, but overrides the
+    # host — .env defaults POSTGRES_HOST to localhost for host-run `make migrate`;
+    # in-cluster it must reach the `postgres` service by name.
+    env_file: .env
+    environment:
+      POSTGRES_HOST: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Exposed on the host so the opt-in live integration test (RUN_LIVE_MCP=1) can
+    # reach the MCP endpoint at http://localhost:8000/mcp.
+    ports:
+      - "${EMAIL_MCP_PORT:-8000}:8000"
+
+  api:
+    build:
+      context: .
+      dockerfile: services/api/Dockerfile
+    restart: unless-stopped
+    # All api Settings come from .env (LLM tag, tokens, MCP URLs, keys). Values
+    # there already point at the in-cluster service names (EMAIL_MCP_URL=...email_mcp...).
+    env_file: .env
+    # Reach the host's Ollama via host.docker.internal (used from Task 10 on; wired
+    # now so the LLM path needs no compose change). Linux requires host-gateway.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      email_mcp:
+        condition: service_started
+    ports:
+      - "${API_PORT:-8001}:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build:
+      context: .
+      dockerfile: services/frontend/Dockerfile
+    restart: unless-stopped
+    # The frontend only needs API_BASE_URL + API_AUTH_TOKEN (both in .env); it holds
+    # no DB or MCP credentials.
+    env_file: .env
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-8501}:8501"
 
 volumes:
   pgdata:

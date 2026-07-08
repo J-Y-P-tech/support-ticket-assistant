@@ -10,12 +10,13 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 
-from app.routes import customer, rep
+from app.routes import customer, health, rep
 
 
 def create_app() -> FastAPI:
     """Build and return the FastAPI app with all Task-4 routers mounted."""
     app = FastAPI(title="Support-Ticket Assistant API")
+    app.include_router(health.router)
     app.include_router(customer.router)
     app.include_router(rep.router)
     return app
