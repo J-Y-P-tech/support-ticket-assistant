@@ -13,10 +13,10 @@ from __future__ import annotations
 
 import secrets
 
-# Depends(...) tells FastAPI: "before running this function, 
+# Depends(...) tells FastAPI: "before running this function,
 # go get this value for me by calling that other function first."
-# The key idea: you never call _bearer_scheme(...) or get_settings() yourself — you 
-# just declare them as parameters, and FastAPI supplies them. 
+# The key idea: you never call _bearer_scheme(...) or get_settings() yourself — you
+# just declare them as parameters, and FastAPI supplies them.
 # That's "dependency injection."
 # Tests can run without requiring those Depends().
 from fastapi import Depends, HTTPException, status

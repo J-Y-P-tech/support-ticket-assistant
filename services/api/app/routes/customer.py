@@ -37,7 +37,7 @@ async def submit_ticket(
 ) -> TicketRead:
     """Create a New ticket and return its reference code and status (SPEC §4.1)."""
     created = await email.create_ticket(payload.message, payload.attachments)
-    # model_validate gets the information from created and validate it against the TicketRead schema.
+    # model_validate reads the fields from `created` and validates them against TicketRead.
     return TicketRead.model_validate(created)
 
 
