@@ -35,7 +35,10 @@ eval: ## Run the AI eval + red-team suites
 	@echo "eval: implemented in Task 29 (evals/ golden + red-team suites)."
 
 migrate: ## Apply DB migrations via email_mcp (reads POSTGRES_* from the env/.env)
-	uv run python services/email_mcp/migrate.py
+	# Load .env into the environment first: migrate.py reads os.environ directly,
+	# and (unlike pydantic-settings / docker-compose) a plain host process does not
+	# auto-read .env. The `[ -f .env ]` guard keeps it working when .env is absent.
+	set -a; [ -f .env ] && . ./.env; set +a; uv run python services/email_mcp/migrate.py
 
 seed: ## Load mock-KB answers + sample tickets
 	@echo "seed: implemented in Tasks 3/7 (sample tickets + mock_kb data)."

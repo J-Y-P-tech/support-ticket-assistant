@@ -13,12 +13,13 @@ Order is dependency-correct; do not start a task before its dependencies are che
 - [x] **4.** api: email MCP client + core routes (submit/lookup/queue) + auth — *deps: 3*
 - [x] **5.** reference-code generate/lookup util — *deps: 2*
 - [x] **6.** frontend: api_client + 3 views (queue list-only) + AppTest + queue pagination (closes Task-4 unbounded-queue gap) — *deps: 4*
-- [ ] **7.** stack wiring: compose services (email_mcp/api/frontend) + api Dockerfile so the walking skeleton boots — *deps: 3,4,6*
+- [x] **7.** stack wiring: compose services (email_mcp/api/frontend) + api Dockerfile so the walking skeleton boots — *deps: 3,4,6*
 - [ ] **Checkpoint B** — walking skeleton: submit → store → rep queue → lookup, no AI
 
 ## Phase 2 — KB connector
 - [ ] **8.** kb_mcp: provider interface + MockKB + search tool + mock_kb data — *deps: 1,2*
 - [ ] **9.** api: kb MCP client wrapper — *deps: 8*
+  - follow-up (Checkpoint B): factor out a shared, session-reusing MCP client and retrofit the email client — today each call re-does the connect/list-tools/DELETE handshake (~5 round-trips). See plan.md.
 
 ## Phase 3 — LLM plumbing + triage
 - [ ] **10.** LLM client + FakeLLM + thinking-trace stripper — *deps: 1*

@@ -188,6 +188,13 @@ tests/,Dockerfile}`.
 **Description:** Client wrapper the agent uses to call `search_knowledge_base`.
 **Acceptance criteria:** returns typed `KBSource[]`; surfaces the no-match signal distinctly.
 **Verification:** unit tests with kb_mcp mocked. **Dependencies:** Task 7. **Scope:** S.
+**Follow-up (from Checkpoint B, plan Task 7):** the email MCP client opens a fresh
+streamable-HTTP session per call — every ticket op costs a connect + `ListToolsRequest`
++ call + `DELETE` (~5 round-trips), observed live in the walking-skeleton logs. As
+this is the second MCP client wrapper, factor out a shared client that reuses the
+session/transport (and caches the tool list) across calls, and retrofit the email
+client onto it, instead of duplicating the per-call handshake. Correctness is fine
+today; this is a latency/chattiness optimization.
 
 ### Phase 3 — LLM plumbing + triage
 
