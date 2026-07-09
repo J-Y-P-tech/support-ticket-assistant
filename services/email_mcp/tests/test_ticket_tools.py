@@ -100,13 +100,13 @@ def test_save_draft_returns_draft_valid_dict(conn: Connection) -> None:
         ticket_id=ticket["id"],
         body="You can reset it from the login screen.",
         citations=[{"source_id": "kb-1", "title": "Reset your password"}],
-        unverified=False,
+        verified=True,
     )
 
     draft = Draft.model_validate(saved)
     assert draft.body == "You can reset it from the login screen."
     assert draft.citations[0].source_id == "kb-1"
-    assert draft.unverified is False
+    assert draft.verified is True
 
 
 def test_get_ticket_reflects_latest_saved_draft(conn: Connection) -> None:

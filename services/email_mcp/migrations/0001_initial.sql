@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS drafts (
     ticket_id   BIGINT NOT NULL REFERENCES tickets (id),
     body        TEXT NOT NULL,
     citations   JSONB NOT NULL DEFAULT '[]'::jsonb,
-    unverified  BOOLEAN NOT NULL DEFAULT FALSE,
+    verified    BOOLEAN NOT NULL DEFAULT TRUE,
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS drafts_ticket_idx ON drafts (ticket_id);

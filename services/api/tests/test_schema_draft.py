@@ -3,7 +3,7 @@
 Pins the grounded-drafting contract (SPEC §4.5): a draft is written from
 authoritative sources and cites which source `id`/`title` it used; a draft built
 on a `model_generated` source (or otherwise low-groundedness) is flagged
-"AI-suggested, unverified" via the `unverified` flag and cannot be presented as
+"AI-suggested, unverified" via `verified=False` and cannot be presented as
 sourced fact.
 """
 
@@ -20,7 +20,7 @@ def test_grounded_draft_round_trips_json() -> None:
     draft = Draft(
         body="You can reset your access from the login page ...",
         citations=[Citation(source_id="kb-042", title="Resetting online-banking access")],
-        unverified=False,
+        verified=True,
     )
 
     restored = Draft.model_validate_json(draft.model_dump_json())
@@ -29,19 +29,19 @@ def test_grounded_draft_round_trips_json() -> None:
     assert restored.citations[0].source_id == "kb-042"
 
 
-def test_draft_defaults_to_no_citations_and_unverified_false() -> None:
-    """A bare draft has no citations and is not flagged unverified by default."""
+def test_draft_defaults_to_no_citations_and_verified_true() -> None:
+    """A bare draft has no citations and is verified by default."""
     draft = Draft(body="hello")
 
     assert draft.citations == []
-    assert draft.unverified is False
+    assert draft.verified is True
 
 
 def test_unverified_draft_carries_the_flag() -> None:
-    """A model-generated/low-groundedness draft records `unverified=True` (SPEC §4.5)."""
-    draft = Draft(body="best-effort answer", unverified=True)
+    """A model-generated/low-groundedness draft records `verified=False` (SPEC §4.5)."""
+    draft = Draft(body="best-effort answer", verified=False)
 
-    assert draft.unverified is True
+    assert draft.verified is False
 
 
 def test_draft_requires_body() -> None:

@@ -35,11 +35,37 @@ Customer message:
 {facts}
 JSON:"""
 
+# Grounded drafting (plan Task 12 / todo Task 13). `{message}` is the customer's
+# ticket; `{sources}` is the rendered block of authoritative KB sources the draft
+# node hands in. The instruction to answer *only* from the sources is the prompt's
+# half of the grounding contract; the node enforces the other half by feeding in
+# authoritative sources alone and citing exactly them (SPEC §4.5).
+_DRAFT = """\
+You are a support-desk assistant for a financial institution. Write a reply to the \
+customer message below using ONLY the information in the provided sources.
+
+Rules:
+- Use only facts, figures, and policies stated in the sources. Do not invent or \
+assume anything that is not there.
+- Make no promises, guarantees, or commitments the sources do not support.
+- Phrase the answer in your own words — do not copy a source verbatim.
+- If the sources do not fully answer the question, address what they do support and \
+say a representative will follow up on the rest.
+
+Customer message:
+{message}
+
+Sources:
+{sources}
+
+Reply:"""
+
 # The registry. New node prompts are added here (name -> template), keeping every
 # prompt in one place. Names are the seam's public contract, shared with Langfuse
 # when Task 28 lands.
 _PROMPTS: dict[str, str] = {
     "triage": _TRIAGE,
+    "draft": _DRAFT,
 }
 
 

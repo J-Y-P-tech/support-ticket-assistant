@@ -193,7 +193,7 @@ def get_ticket(conn: Connection, ticket_id: int) -> dict[str, Any] | None:
             return None
 
         cur.execute(
-            "SELECT id, ticket_id, body, citations, unverified "
+            "SELECT id, ticket_id, body, citations, verified "
             "FROM drafts WHERE ticket_id = %s ORDER BY id DESC LIMIT 1",
             (ticket_id,),
         )
@@ -229,15 +229,15 @@ def save_draft(
     ticket_id: int,
     body: str,
     citations: list[dict[str, Any]] | None = None,
-    unverified: bool = False,
+    verified: bool = True,
 ) -> dict[str, Any]:
     """Persist a reply draft for a ticket and return it (`Draft`-shaped)."""
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
-            "INSERT INTO drafts (ticket_id, body, citations, unverified) "
+            "INSERT INTO drafts (ticket_id, body, citations, verified) "
             "VALUES (%s, %s, %s, %s) "
-            "RETURNING id, ticket_id, body, citations, unverified",
-            (ticket_id, body, Jsonb(citations or []), unverified),
+            "RETURNING id, ticket_id, body, citations, verified",
+            (ticket_id, body, Jsonb(citations or []), verified),
         )
         row = cur.fetchone()
     assert row is not None

@@ -76,7 +76,7 @@ def save_draft(
     ticket_id: int,
     body: str,
     citations: list[dict[str, Any]] | None = None,
-    unverified: bool = False,
+    verified: bool = True,
 ) -> dict[str, Any]:
     """Persist a reply draft for a ticket and return the saved draft."""
     with db.connect_from_env() as conn:
@@ -85,7 +85,7 @@ def save_draft(
             ticket_id=ticket_id,
             body=body,
             citations=citations,
-            unverified=unverified,
+            verified=verified,
         )
 
 

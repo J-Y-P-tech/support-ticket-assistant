@@ -26,8 +26,8 @@ Order is dependency-correct; do not start a task before its dependencies are che
 - [x] **11.** triage node (validated, retry-once) — *deps: 2,10*
 
 ## Phase 4 — Retrieval + grounded drafting
-- [ ] **12.** retrieve node + groundedness gate — *deps: 9,11*
-- [ ] **13.** draft node (grounded, cited; unverified flag) — *deps: 12*
+- [x] **12.** retrieve node + groundedness gate — *deps: 9,11*
+- [x] **13.** draft node (grounded, cited; unverified flag) — *deps: 12*
 - [ ] **14.** validate node (schema + groundedness scorer) — *deps: 13*
 
 ## Phase 5 — Guardrails
