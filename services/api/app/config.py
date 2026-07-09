@@ -42,6 +42,9 @@ class Settings(BaseSettings):
     queue_page_default: int  # rep-queue page size when the client asks for none
     queue_page_max: int  # hard ceiling on a rep-queue page, so no request pulls the lot
 
+    # --- Agent node behaviour (tuning knobs) ---
+    triage_max_attempts: int  # model tries for a valid TriageResult before human hand-off
+
     # --- Inter-service auth: a separate bearer token per connection (least privilege, SPEC §6) ---
     api_auth_token: SecretStr  # presented by the frontend to this api
     email_mcp_url: str

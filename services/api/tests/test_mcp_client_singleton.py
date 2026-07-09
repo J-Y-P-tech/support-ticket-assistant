@@ -26,6 +26,7 @@ _ENV: dict[str, str] = {
     "KB_SEARCH_LIMIT": "3",
     "QUEUE_PAGE_DEFAULT": "50",
     "QUEUE_PAGE_MAX": "200",
+    "TRIAGE_MAX_ATTEMPTS": "2",
     "API_AUTH_TOKEN": "test-frontend-to-api-token",
     "EMAIL_MCP_URL": "http://email_mcp:8000/mcp",
     "EMAIL_MCP_TOKEN": "api-to-email-token",

@@ -22,8 +22,8 @@ Order is dependency-correct; do not start a task before its dependencies are che
   - follow-up (Checkpoint B): factor out a shared, session-reusing MCP client and retrofit the email client — today each call re-does the connect/list-tools/DELETE handshake (~5 round-trips). See plan.md.
 
 ## Phase 3 — LLM plumbing + triage
-- [ ] **10.** LLM client + FakeLLM + thinking-trace stripper — *deps: 1*
-- [ ] **11.** triage node (validated, retry-once) — *deps: 2,10*
+- [x] **10.** LLM client + FakeLLM + thinking-trace stripper — *deps: 1*
+- [x] **11.** triage node (validated, retry-once) — *deps: 2,10*
 
 ## Phase 4 — Retrieval + grounded drafting
 - [ ] **12.** retrieve node + groundedness gate — *deps: 9,11*
