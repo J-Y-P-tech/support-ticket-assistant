@@ -195,6 +195,13 @@ this is the second MCP client wrapper, factor out a shared client that reuses th
 session/transport (and caches the tool list) across calls, and retrofit the email
 client onto it, instead of duplicating the per-call handshake. Correctness is fine
 today; this is a latency/chattiness optimization.
+**Follow-up (deferred, from Task 8 impl 2026-07-09):** the shared client's
+reconnect+retry is scoped to idempotent reads; writes (`create_ticket`, and later
+`save_draft`/`record_sent_reply`/`update_status`) deliberately do **not** retry so a
+half-completed call can't silently duplicate. The production-grade fix is an
+idempotency key — the write carries a client-generated UUID and `email_mcp` dedupes
+via a unique constraint (needs an email_mcp tool-signature change + a migration).
+Out of scope for Task 8; revisit before this goes anywhere near real traffic.
 
 ### Phase 3 — LLM plumbing + triage
 

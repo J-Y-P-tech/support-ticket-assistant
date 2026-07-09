@@ -59,11 +59,15 @@ def test_parse_unwraps_wrapped_list_payload() -> None:
 
 
 def test_parse_raises_on_tool_error() -> None:
-    """A tool result flagged as an error raises `EmailMCPError`, never returns."""
+    """A tool result flagged as an error raises the given error class, never returns.
+
+    The shared parser takes the client-specific error class; the email client passes
+    `EmailMCPError`, so an email tool error surfaces as `EmailMCPError`.
+    """
     result = CallToolResult(content=[TextContent(type="text", text="boom")], isError=True)
 
     with pytest.raises(EmailMCPError):
-        _parse_tool_result(result)
+        _parse_tool_result(result, EmailMCPError)
 
 
 @pytest.fixture
@@ -77,10 +81,10 @@ async def test_get_ticket_maps_found_false_to_none(
 ) -> None:
     """email_mcp's `{"found": False}` not-found marker is mapped to None."""
 
-    async def fake_call(tool: str, arguments: dict[str, Any]) -> Any:
+    async def fake_call(tool: str, arguments: dict[str, Any], **_kwargs: Any) -> Any:
         return {"found": False}
 
-    monkeypatch.setattr(wrapper, "_call", fake_call)
+    monkeypatch.setattr(wrapper, "call_tool", fake_call)
 
     assert await wrapper.get_ticket(999_999) is None
 
@@ -91,10 +95,10 @@ async def test_get_ticket_returns_ticket_dict(
     """A found ticket dict is returned unchanged by `get_ticket`."""
     ticket = {"id": 7, "reference_code": "TKT-0007", "status": "New"}
 
-    async def fake_call(tool: str, arguments: dict[str, Any]) -> Any:
+    async def fake_call(tool: str, arguments: dict[str, Any], **_kwargs: Any) -> Any:
         return ticket
 
-    monkeypatch.setattr(wrapper, "_call", fake_call)
+    monkeypatch.setattr(wrapper, "call_tool", fake_call)
 
     assert await wrapper.get_ticket(7) == ticket
 
@@ -104,10 +108,10 @@ async def test_get_ticket_by_code_maps_found_false_to_none(
 ) -> None:
     """An unknown reference code resolves to a neutral None."""
 
-    async def fake_call(tool: str, arguments: dict[str, Any]) -> Any:
+    async def fake_call(tool: str, arguments: dict[str, Any], **_kwargs: Any) -> Any:
         return {"found": False}
 
-    monkeypatch.setattr(wrapper, "_call", fake_call)
+    monkeypatch.setattr(wrapper, "call_tool", fake_call)
 
     assert await wrapper.get_ticket_by_code("TKT-9999") is None
 
@@ -118,12 +122,12 @@ async def test_create_ticket_forwards_arguments(
     """`create_ticket` calls the `create_ticket` tool with message + attachments."""
     seen: dict[str, Any] = {}
 
-    async def fake_call(tool: str, arguments: dict[str, Any]) -> Any:
+    async def fake_call(tool: str, arguments: dict[str, Any], **_kwargs: Any) -> Any:
         seen["tool"] = tool
         seen["arguments"] = arguments
         return {"reference_code": "TKT-0001", "status": "New"}
 
-    monkeypatch.setattr(wrapper, "_call", fake_call)
+    monkeypatch.setattr(wrapper, "call_tool", fake_call)
 
     await wrapper.create_ticket("help me", ["a.pdf"])
 
@@ -137,9 +141,42 @@ async def test_fetch_new_tickets_returns_list(
     """`fetch_new_tickets` returns the list payload from the tool result."""
     rows = [{"id": 1, "reference_code": "TKT-0001", "status": "New"}]
 
-    async def fake_call(tool: str, arguments: dict[str, Any]) -> Any:
+    async def fake_call(tool: str, arguments: dict[str, Any], **_kwargs: Any) -> Any:
         return rows
 
-    monkeypatch.setattr(wrapper, "_call", fake_call)
+    monkeypatch.setattr(wrapper, "call_tool", fake_call)
 
-    assert await wrapper.fetch_new_tickets() == rows
+    assert await wrapper.fetch_new_tickets(limit=50) == rows
+
+
+async def test_reads_opt_into_retry_but_writes_do_not(
+    wrapper: EmailMCPClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reads pass `retry_on_disconnect=True`; the write `create_ticket` does not.
+
+    This is the read-only retry policy: a dropped connection may safely re-run a
+    lookup, but never a ticket creation (no silent duplicate).
+    """
+    seen: dict[str, bool] = {}
+
+    async def fake_call(
+        tool: str, arguments: dict[str, Any], *, retry_on_disconnect: bool = False
+    ) -> Any:
+        seen[tool] = retry_on_disconnect
+        if tool == "create_ticket":
+            return {"reference_code": "TKT-0001", "status": "New"}
+        if tool == "fetch_new_tickets":
+            return []
+        return {"id": 1, "reference_code": "TKT-0001", "status": "New"}
+
+    monkeypatch.setattr(wrapper, "call_tool", fake_call)
+
+    await wrapper.create_ticket("hi")
+    await wrapper.get_ticket(1)
+    await wrapper.get_ticket_by_code("TKT-0001")
+    await wrapper.fetch_new_tickets(limit=50)
+
+    assert seen["create_ticket"] is False  # write: never retried
+    assert seen["get_ticket"] is True
+    assert seen["get_ticket_by_code"] is True
+    assert seen["fetch_new_tickets"] is True

@@ -14,15 +14,10 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
+from app.config import Settings, get_settings
 from app.mcp_clients.email import EmailMCPClient, get_email_client
 from app.schemas.ticket import QueuePage, QueueRow
 from app.security import require_auth
-
-# Server-side page sizing (plan Task 6, closing the Task-4 unbounded-queue gap):
-# a default page and a hard ceiling the client can never exceed, so no request can
-# pull the whole New queue in one call.
-DEFAULT_QUEUE_LIMIT = 50
-MAX_QUEUE_LIMIT = 200
 
 router = APIRouter(prefix="/rep", dependencies=[Depends(require_auth)])
 
@@ -48,17 +43,20 @@ def _parse_cursor(after: str | None) -> tuple[str, int] | None:
 
 @router.get("/queue", response_model=QueuePage)
 async def rep_queue(
-    limit: int = Query(default=DEFAULT_QUEUE_LIMIT),
+    limit: int | None = Query(default=None),
     after: str | None = Query(default=None),
+    settings: Settings = Depends(get_settings),
     email: EmailMCPClient = Depends(get_email_client),
 ) -> QueuePage:
     """Return one keyset page of the New-ticket rep queue.
 
-    `limit` is clamped to `[1, MAX_QUEUE_LIMIT]` so an oversized ask is capped
-    rather than rejected; `after` resumes past the last row already seen. A full
-    page yields a `next_cursor` (more may remain); a short page yields `None`.
+    An omitted `limit` falls back to the configured `QUEUE_PAGE_DEFAULT`; any value
+    is clamped to `[1, QUEUE_PAGE_MAX]` so an oversized ask is capped rather than
+    rejected; `after` resumes past the last row already seen. A full page yields a
+    `next_cursor` (more may remain); a short page yields `None`.
     """
-    capped = min(max(limit, 1), MAX_QUEUE_LIMIT)
+    requested = settings.queue_page_default if limit is None else limit
+    capped = min(max(requested, 1), settings.queue_page_max)
     cursor = _parse_cursor(after)
     rows = await email.fetch_new_tickets(limit=capped, after=cursor)
     items = [QueueRow.model_validate(row) for row in rows]

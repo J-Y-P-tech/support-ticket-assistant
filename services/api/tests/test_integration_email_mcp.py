@@ -38,14 +38,19 @@ async def test_create_then_lookup_roundtrip() -> None:
         token=os.environ["EMAIL_MCP_TOKEN"],
     )
 
-    created = await client.create_ticket("integration: I can't log in.", [])
-    code = created["reference_code"]
-    assert code.startswith("TKT-")
-    assert created["status"] == "New"
+    try:
+        created = await client.create_ticket("integration: I can't log in.", [])
+        code = created["reference_code"]
+        assert code.startswith("TKT-")
+        assert created["status"] == "New"
 
-    looked_up = await client.get_ticket_by_code(code)
-    assert looked_up is not None
-    assert looked_up["reference_code"] == code
+        looked_up = await client.get_ticket_by_code(code)
+        assert looked_up is not None
+        assert looked_up["reference_code"] == code
 
-    # An unknown code resolves to a neutral not-found, not an error.
-    assert await client.get_ticket_by_code("TKT-0000") is None
+        # An unknown code resolves to a neutral not-found, not an error.
+        assert await client.get_ticket_by_code("TKT-0000") is None
+    finally:
+        # The client now holds a reused session; close it so the transport's
+        # background tasks shut down cleanly at the end of the test.
+        await client.aclose()

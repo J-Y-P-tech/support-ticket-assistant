@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     llm_model: str
     ollama_base_url: str
 
+    # --- Retrieval / pagination sizing (tuning knobs, not code; single source of
+    #     truth shared with the MCP servers via the same env vars) ---
+    kb_search_limit: int  # max ranked KB sources a search requests (kb_mcp default too)
+    queue_page_default: int  # rep-queue page size when the client asks for none
+    queue_page_max: int  # hard ceiling on a rep-queue page, so no request pulls the lot
+
     # --- Inter-service auth: a separate bearer token per connection (least privilege, SPEC §6) ---
     api_auth_token: SecretStr  # presented by the frontend to this api
     email_mcp_url: str

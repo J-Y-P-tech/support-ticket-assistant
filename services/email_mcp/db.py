@@ -130,10 +130,17 @@ def create_ticket(
     return row
 
 
+# Default rep-queue page size, read from the shared `QUEUE_PAGE_DEFAULT` env var
+# (the same value the api uses) so the two sides can't drift; the literal is only a
+# fallback when the var is unset. The api always passes an explicit `limit`, so this
+# default only applies to direct/other callers.
+DEFAULT_PAGE_LIMIT = int(os.environ.get("QUEUE_PAGE_DEFAULT", "50"))
+
+
 def fetch_new_tickets(
     conn: Connection,
     *,
-    limit: int = 50,
+    limit: int = DEFAULT_PAGE_LIMIT,
     after: tuple[str, int] | None = None,
 ) -> list[dict[str, Any]]:
     """Return one keyset page of New (untriaged) tickets, oldest first.

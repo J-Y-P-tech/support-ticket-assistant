@@ -7,6 +7,8 @@ task is queue + detail read-only. The email MCP client is mocked.
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi.testclient import TestClient
 
 from tests.conftest import FakeEmailClient
@@ -41,22 +43,44 @@ def test_queue_returns_new_tickets_in_a_paged_envelope(
 
 
 def test_queue_caps_results_at_the_hard_max(
-    client: TestClient, email_client: FakeEmailClient, auth_headers: dict[str, str]
+    client: TestClient,
+    email_client: FakeEmailClient,
+    auth_headers: dict[str, str],
+    test_settings: Any,
 ) -> None:
     """Even asking for far more than the max returns at most the configured cap."""
-    from app.routes.rep import MAX_QUEUE_LIMIT
-
-    email_client.queue_rows = [_queue_row(n) for n in range(1, MAX_QUEUE_LIMIT + 50)]
+    max_limit = test_settings.queue_page_max
+    email_client.queue_rows = [_queue_row(n) for n in range(1, max_limit + 50)]
 
     response = client.get("/rep/queue", params={"limit": 100_000}, headers=auth_headers)
 
     assert response.status_code == 200
     body = response.json()
-    assert len(body["items"]) == MAX_QUEUE_LIMIT
+    assert len(body["items"]) == max_limit
     # A full page means more may remain, so a cursor is handed back.
     assert body["next_cursor"] is not None
     # The route forwarded the capped limit (never the client's oversized ask).
-    assert email_client.calls[-1] == ("fetch_new_tickets", MAX_QUEUE_LIMIT, None)
+    assert email_client.calls[-1] == ("fetch_new_tickets", max_limit, None)
+
+
+def test_queue_uses_configured_default_page_size_when_none_requested(
+    client: TestClient,
+    email_client: FakeEmailClient,
+    auth_headers: dict[str, str],
+    test_settings: Any,
+) -> None:
+    """With no `limit`, the route forwards the configured `QUEUE_PAGE_DEFAULT`."""
+    email_client.queue_rows = [_queue_row(1)]
+
+    response = client.get("/rep/queue", headers=auth_headers)
+
+    assert response.status_code == 200
+    # The route asked email_mcp for exactly the configured default page size.
+    assert email_client.calls[-1] == (
+        "fetch_new_tickets",
+        test_settings.queue_page_default,
+        None,
+    )
 
 
 def test_queue_next_page_has_no_overlap_with_first(

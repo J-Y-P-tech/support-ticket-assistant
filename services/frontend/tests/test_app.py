@@ -33,7 +33,7 @@ class FakeApiClient:
         """Return the registered ticket for `code`, or None (neutral not-found)."""
         return self.tickets.get(code)
 
-    def fetch_queue(self, *, limit: int = 50, after: str | None = None) -> dict[str, Any]:
+    def fetch_queue(self, *, limit: int | None = None, after: str | None = None) -> dict[str, Any]:
         """Return an empty queue page (the rep view is not under test here)."""
         return {"items": [], "next_cursor": None}
 

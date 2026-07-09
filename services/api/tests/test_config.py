@@ -22,6 +22,9 @@ from app.config import Settings
 _COMPLETE_ENV: dict[str, str] = {
     "LLM_MODEL": "gemma4:12b",
     "OLLAMA_BASE_URL": "http://host.docker.internal:11434",
+    "KB_SEARCH_LIMIT": "3",
+    "QUEUE_PAGE_DEFAULT": "50",
+    "QUEUE_PAGE_MAX": "200",
     "API_AUTH_TOKEN": "frontend-to-api-token",
     "EMAIL_MCP_URL": "http://email_mcp:8000",
     "EMAIL_MCP_TOKEN": "api-to-email-token",
@@ -54,6 +57,10 @@ def test_loads_all_values_from_env(full_env: None) -> None:
     assert settings.email_mcp_url == "http://email_mcp:8000"
     assert settings.kb_mcp_url == "http://kb_mcp:8000"
     assert settings.langfuse_host == "http://langfuse:3000"
+    # Sizing knobs are parsed as ints, not left as strings.
+    assert settings.kb_search_limit == 3
+    assert settings.queue_page_default == 50
+    assert settings.queue_page_max == 200
 
 
 def test_secrets_are_secretstr(full_env: None) -> None:

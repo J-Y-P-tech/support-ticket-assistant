@@ -109,3 +109,17 @@ def test_fetch_queue_omits_after_on_the_first_page() -> None:
     _client(handler).fetch_queue()
 
     assert "after" not in captured["params"]
+
+
+def test_fetch_queue_omits_limit_when_not_specified() -> None:
+    """With no explicit `limit`, the frontend sends none, deferring to the api's default."""
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        """Record the query params for a default-page-size request."""
+        captured["params"] = dict(request.url.params)
+        return httpx.Response(200, json={"items": [], "next_cursor": None})
+
+    _client(handler).fetch_queue()
+
+    assert "limit" not in captured["params"]

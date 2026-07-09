@@ -36,8 +36,10 @@ mcp = FastMCP(
 _provider = MockKBProvider()
 
 # How many ranked sources a search returns by default: a handful keeps a draft
-# grounded in the strongest matches without drowning it in near-misses.
-DEFAULT_LIMIT = 3
+# grounded in the strongest matches without drowning it in near-misses. Read from
+# the shared `KB_SEARCH_LIMIT` env var (same value the api uses) so the two sides
+# can't drift; the literal is only a fallback when the var is unset.
+DEFAULT_LIMIT = int(os.environ.get("KB_SEARCH_LIMIT", "3"))
 
 
 @mcp.tool()

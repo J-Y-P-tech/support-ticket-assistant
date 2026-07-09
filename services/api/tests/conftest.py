@@ -29,6 +29,9 @@ TEST_API_TOKEN = "test-frontend-to-api-token"
 _TEST_ENV: dict[str, str] = {
     "LLM_MODEL": "gemma4:12b",
     "OLLAMA_BASE_URL": "http://host.docker.internal:11434",
+    "KB_SEARCH_LIMIT": "3",
+    "QUEUE_PAGE_DEFAULT": "50",
+    "QUEUE_PAGE_MAX": "200",
     "API_AUTH_TOKEN": TEST_API_TOKEN,
     "EMAIL_MCP_URL": "http://email_mcp:8000/mcp",
     "EMAIL_MCP_TOKEN": "api-to-email-token",
@@ -85,7 +88,7 @@ class FakeEmailClient:
         return self.tickets_by_id.get(ticket_id)
 
     async def fetch_new_tickets(
-        self, *, limit: int = 50, after: tuple[str, int] | None = None
+        self, *, limit: int, after: tuple[str, int] | None = None
     ) -> list[dict[str, Any]]:
         """Return one keyset page of the configured queue rows.
 

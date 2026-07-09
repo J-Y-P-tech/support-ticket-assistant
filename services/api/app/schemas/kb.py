@@ -18,3 +18,16 @@ class KBSource(BaseModel):
     title: str
     text: str
     source_kind: SourceKind
+
+
+class KBSearchResult(BaseModel):
+    """The kb client's typed reply: ranked sources plus the grounding signal.
+
+    `no_confident_source` is carried explicitly, not inferred from an empty
+    `sources` list: a `model_generated` fallback can populate `sources` while
+    nothing *authoritative* matched, and that case must still route to
+    needs-human-research (SPEC §4.4 / §4.5).
+    """
+
+    sources: list[KBSource]
+    no_confident_source: bool

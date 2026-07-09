@@ -38,7 +38,7 @@ def create_ticket(message: str, attachments: list[str] | None = None) -> dict[st
 
 @mcp.tool()
 def fetch_new_tickets(
-    limit: int = 50,
+    limit: int = db.DEFAULT_PAGE_LIMIT,
     after_created_at: str | None = None,
     after_id: int | None = None,
 ) -> list[dict[str, Any]]:

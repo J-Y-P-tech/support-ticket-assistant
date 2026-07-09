@@ -59,12 +59,16 @@ class ApiClient:
         response.raise_for_status()
         return _json_dict(response)
 
-    def fetch_queue(self, *, limit: int = 50, after: str | None = None) -> dict[str, Any]:
+    def fetch_queue(self, *, limit: int | None = None, after: str | None = None) -> dict[str, Any]:
         """Return one keyset page of the rep queue (`{items, next_cursor}`).
 
+        `limit` is omitted by default so page size is decided by the api's configured
+        `QUEUE_PAGE_DEFAULT` — the frontend holds no page-size policy of its own.
         `after` is the `next_cursor` from the previous page; omitted on page one.
         """
-        params: dict[str, Any] = {"limit": limit}
+        params: dict[str, Any] = {}
+        if limit is not None:
+            params["limit"] = limit
         if after is not None:
             params["after"] = after
         response = self._client.get("/rep/queue", params=params)
