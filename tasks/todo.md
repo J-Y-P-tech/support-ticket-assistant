@@ -18,7 +18,7 @@ Order is dependency-correct; do not start a task before its dependencies are che
 
 ## Phase 2 — KB connector
 - [x] **8.** kb_mcp: provider interface + MockKB + search tool + mock_kb data — *deps: 1,2*
-- [ ] **9.** api: kb MCP client wrapper — *deps: 8*
+- [x] **9.** api: kb MCP client wrapper — *deps: 8*
   - follow-up (Checkpoint B): factor out a shared, session-reusing MCP client and retrofit the email client — today each call re-does the connect/list-tools/DELETE handshake (~5 round-trips). See plan.md.
 
 ## Phase 3 — LLM plumbing + triage

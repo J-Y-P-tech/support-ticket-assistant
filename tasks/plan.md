@@ -271,6 +271,13 @@ until Phase 7.)
 **Verification:** workflow integration test; explicit safety-invariant test (SPEC §10).
 **Dependencies:** Tasks 3, 10–15. **Scope:** L. **Files:** `services/api/app/graph/{state.py,nodes/,
 workflow.py}`, `tests/`.
+> **Thinking-trace leak → human flag (from Task 10 review).** The LLM client reads
+> Ollama's trace-free `response` field, but a model that ignores `think` can still
+> leak a `<think>`/`…done thinking` trace into it. `contains_thinking_trace` (Task 10,
+> in `app/llm/thinking.py`) detects this. Free-text node output (draft; OCR in Phase 7)
+> that trips the detector must set a `trace_leak` flag on the state so `human_review`
+> surfaces it to the rep — never silently strip. Structured nodes (triage/extraction)
+> already fail schema-validation on a leak and retry; detection there is for logging.
 
 #### Task 17: api — rep-action routes + finalize
 **Description:** Routes for edit/approve/reject/send that resume the graph; `finalize` saves the
@@ -323,6 +330,11 @@ fails closed. **Verification:** unit tests. **Dependencies:** Tasks 3, 20. **Sco
 enforce bearer auth on every api↔MCP call. **Acceptance criteria:** logs never contain full account/
 card numbers, IDs, or raw attachment text; oversized/disallowed upload rejected. **Verification:**
 redaction unit test on a log record with PII. **Dependencies:** Task 4, 22. **Scope:** M.
+> **Thinking-trace leak monitoring (from Task 10 review).** At the `OllamaLLM.generate`
+> choke point, call `contains_thinking_trace` on the model's `response`; on a hit emit a
+> structured `llm_trace_leak` warning (model tag + node, PII-redacted) and increment a
+> counter, so a model that stops honouring `think` is visible/alertable in production
+> rather than silently degrading. Detection only — handling (human flag) is Task 16.
 
 #### Task 24: compliance audit trail
 **Description:** Immutable per-ticket audit rows (submission, each node outcome, cited sources, model
@@ -363,6 +375,10 @@ outcomes), PII-redacted; store trace id on the ticket; attach rep feedback + eva
 **Acceptance criteria:** a run produces a trace with the trace id persisted; redaction test asserts
 no PII in trace payloads (SPEC §7.2). **Verification:** unit test on the redacting callback; compose
 config valid. **Dependencies:** Tasks 16, 23, 25. **Scope:** M/L.
+> **Thinking-trace leak score (from Task 10 review).** Attach a `trace_leak` boolean
+> score to the ticket trace (from the Task 23 detection signal) so leaks are trended on
+> the Langfuse dashboard per model tag — closes the loop from pre-deploy grounding
+> (the `test_llm_capture.py` fixture) to production observability.
 
 ### Phase 11 — Evals + CI
 
