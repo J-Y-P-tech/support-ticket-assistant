@@ -32,10 +32,10 @@ Order is dependency-correct; do not start a task before its dependencies are che
 
 ## Phase 5 — Guardrails
 - [x] **15.** input guards: prompt-injection screening — *deps: 10*
-- [ ] **16.** output guards: forbidden promises / PII / tone — *deps: 13*
+- [x] **16.** output guards: forbidden promises / PII / tone — *deps: 13*
 
 ## Phase 6 — Workflow assembly + human-in-the-loop
-- [ ] **17.** LangGraph workflow + human interrupt + Postgres checkpointer + safety-invariant test — *deps: 3,11–16*
+- [x] **17.** LangGraph workflow + human interrupt + Postgres checkpointer + safety-invariant test — *deps: 3,11–16*
 - [ ] **18.** api: rep-action routes (edit/approve/reject/send) + finalize — *deps: 17*
 - [ ] **19.** frontend: rep workspace draft review — *deps: 18*
   - follow-up (Checkpoint B review): views call `raise_for_status()` with no handling, so a 401/500 on submit or the rep queue surfaces as a raw Streamlit stack trace. Wrap the api calls in the three views (customer/check_my_case/rep_workspace) and show a friendly `st.error(...)` instead.

@@ -19,6 +19,10 @@ dependencies = [
     # client (already transitive via mcp; pinned here as a direct dependency).
     "streamlit>=1.38,<2",
     "httpx>=0.27,<1",
+    # api (Task 17): the LangGraph workflow engine (SPEC §2/§5) + its Postgres
+    # checkpointer, so a case pending human review survives a restart (SPEC §5).
+    "langgraph>=0.2,<1",
+    "langgraph-checkpoint-postgres>=2,<3",
 ]
 
 [dependency-groups]
@@ -82,6 +86,22 @@ ignore_missing_imports = true
 [[tool.mypy.overrides]]
 module = ["streamlit.*"]
 ignore_missing_imports = true
+
+# LangGraph (Task 17) is imported only by the workflow-assembly module. Silence the
+# missing-stub noise if a released build ships without a py.typed marker, without
+# loosening strictness anywhere else.
+[[tool.mypy.overrides]]
+module = ["langgraph.*", "langgraph_checkpoint.*"]
+ignore_missing_imports = true
+
+# `app.graph.workflow` is the thin seam that binds our typed state to LangGraph's own
+# generics (`StateGraph`, `CompiledStateGraph`, `BaseCheckpointSaver`), whose type-
+# parameter arity shifts across LangGraph versions. Use those types bare here and
+# disable only the `type-arg` check for this one gluing module, so a LangGraph upgrade
+# never breaks the type gate on an arity change while the rest of the app stays strict.
+[[tool.mypy.overrides]]
+module = ["app.graph.workflow"]
+disable_error_code = ["type-arg"]
 
 [tool.pytest.ini_options]
 # Services are independent import roots. Extend this list as tasks add services.
