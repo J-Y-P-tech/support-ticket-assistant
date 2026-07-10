@@ -20,9 +20,12 @@ class FakeApiClient:
     """In-memory stand-in for `ApiClient`, injected via `st.session_state`."""
 
     def __init__(self) -> None:
-        """Start with no known tickets and an empty submission log."""
+        """Start with no known tickets, an empty submission log, and an empty queue."""
         self.submitted: list[tuple[str, list[str]]] = []
         self.tickets: dict[str, dict[str, Any]] = {}
+        self.queue_page: dict[str, Any] = {"items": [], "next_cursor": None}
+        self.review: dict[str, Any] | None = None
+        self.actions: list[tuple[Any, ...]] = []
 
     def submit_ticket(self, message: str, attachments: list[str] | None = None) -> dict[str, Any]:
         """Record the submission and return a freshly-created New ticket."""
@@ -34,8 +37,37 @@ class FakeApiClient:
         return self.tickets.get(code)
 
     def fetch_queue(self, *, limit: int | None = None, after: str | None = None) -> dict[str, Any]:
-        """Return an empty queue page (the rep view is not under test here)."""
-        return {"items": [], "next_cursor": None}
+        """Return the configured queue page (empty unless a rep test sets one)."""
+        return self.queue_page
+
+    def fetch_review(self, ticket_id: int) -> dict[str, Any]:
+        """Return the configured draft-review payload for a ticket."""
+        self.actions.append(("fetch_review", ticket_id))
+        assert self.review is not None
+        return self.review
+
+    def approve_draft(self, ticket_id: int) -> dict[str, Any]:
+        """Record an approve and return a staged (not-yet-sent) result."""
+        self.actions.append(("approve", ticket_id))
+        return {"ticket_id": ticket_id, "status": "Drafted", "reply": None}
+
+    def edit_draft(self, ticket_id: int, reply: str) -> dict[str, Any]:
+        """Record an edit and return a staged result."""
+        self.actions.append(("edit", ticket_id, reply))
+        return {"ticket_id": ticket_id, "status": "Drafted", "reply": None}
+
+    def send_draft(self, ticket_id: int, rep_id: str) -> dict[str, Any]:
+        """Record a send and return a Resolved result carrying the drafted reply."""
+        self.actions.append(("send", ticket_id, rep_id))
+        reply = self.review["draft"]["body"] if self.review else None
+        return {"ticket_id": ticket_id, "status": "Resolved", "reply": reply}
+
+    def reject_draft(
+        self, ticket_id: int, rep_id: str, reason: str | None = None
+    ) -> dict[str, Any]:
+        """Record a reject and return a NeedsResearch result."""
+        self.actions.append(("reject", ticket_id, rep_id, reason))
+        return {"ticket_id": ticket_id, "status": "NeedsResearch", "reply": None}
 
 
 def _app_with_client(client: FakeApiClient) -> AppTest:
@@ -80,3 +112,78 @@ def test_submitting_a_blank_message_shows_an_error_not_a_code() -> None:
 
     assert client.submitted == []
     assert len(at.error) >= 1
+
+
+# --- Rep workspace: draft review + disposition (plan Task 19) -----------------
+
+
+def _queued_ticket() -> dict[str, Any]:
+    """Build a one-ticket queue page whose row is selectable for review (id 7)."""
+    return {
+        "items": [
+            {
+                "id": 7,
+                "reference_code": "TKT-0007",
+                "status": "Drafted",
+                "urgency": "normal",
+                "category": "account_access",
+            }
+        ],
+        "next_cursor": None,
+    }
+
+
+def _review_payload(*, verified: bool = True, flags: list[str] | None = None) -> dict[str, Any]:
+    """Build a draft-review payload for ticket 7, tunable for the unverified case."""
+    return {
+        "ticket_id": 7,
+        "status": "Drafted",
+        "message": "How do I reset my online banking password?",
+        "extracted_facts": None,
+        "triage": {"category": "account_access", "urgency": "normal", "sentiment": "neutral"},
+        "sources": [{"id": "KB-1", "title": "Password reset", "text": "Use the login screen."}],
+        "draft": {
+            "body": "You can reset your password from the login screen. [KB-1]",
+            "citations": [{"source_id": "KB-1", "title": "Password reset"}],
+            "verified": verified,
+        },
+        "flags": flags or [],
+        "trace_leak": False,
+    }
+
+
+def test_rep_approve_then_send_resolves_the_case() -> None:
+    """Approving then sending a draft in the rep workspace resolves the case.
+
+    The SPEC §4.7 two-step disposition through the UI: the rep opens the queued
+    ticket's review, approves the draft, supplies their audit marker, and sends —
+    the workspace then reports the case Resolved and forwarded the marker on send.
+    """
+    client = FakeApiClient()
+    client.queue_page = _queued_ticket()
+    client.review = _review_payload()
+    at = _app_with_client(client)
+
+    at.sidebar.radio[0].set_value("Rep workspace").run()
+    at.text_input(key="rep_rep_id").set_value("rep-1").run()
+    at.button(key="rep_approve").click().run()
+    at.button(key="rep_send").click().run()
+
+    assert any("Resolved" in msg.value for msg in at.success)
+    assert ("send", 7, "rep-1") in client.actions
+
+
+def test_rep_unverified_draft_shows_a_warning_banner() -> None:
+    """A draft flagged unverified renders a warning banner in the rep workspace.
+
+    When the api marks the draft `verified: False` (it drifted from its sources), the
+    workspace must warn the rep — the draft can't be presented as sourced fact.
+    """
+    client = FakeApiClient()
+    client.queue_page = _queued_ticket()
+    client.review = _review_payload(verified=False)
+    at = _app_with_client(client)
+
+    at.sidebar.radio[0].set_value("Rep workspace").run()
+
+    assert any("unverified" in msg.value.lower() for msg in at.warning)

@@ -123,3 +123,109 @@ def test_fetch_queue_omits_limit_when_not_specified() -> None:
     _client(handler).fetch_queue()
 
     assert "limit" not in captured["params"]
+
+
+# --- Draft-review: fetch payload + the four rep actions (plan Task 19) --------
+
+
+def test_fetch_review_gets_the_payload_for_a_ticket_id() -> None:
+    """Fetching a review GETs the id's review path and returns the payload body."""
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        """Record the request and return a draft-review payload."""
+        captured["path"] = request.url.path
+        captured["method"] = request.method
+        captured["auth"] = request.headers.get("Authorization")
+        return httpx.Response(
+            200,
+            json={
+                "ticket_id": 7,
+                "status": "Drafted",
+                "message": "How do I reset my password?",
+                "draft": {"body": "Use the login screen.", "citations": [], "verified": True},
+                "sources": [{"id": "KB-1", "title": "Password reset", "text": "..."}],
+                "flags": [],
+                "trace_leak": False,
+            },
+        )
+
+    result = _client(handler).fetch_review(7)
+
+    assert captured["method"] == "GET"
+    assert captured["path"] == "/rep/tickets/7/review"
+    assert captured["auth"] == f"Bearer {TOKEN}"
+    assert result["draft"]["body"] == "Use the login screen."
+    assert result["sources"][0]["id"] == "KB-1"
+
+
+def test_approve_draft_posts_to_the_approve_action() -> None:
+    """Approving POSTs the id's approve path and returns the action result."""
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        """Record the request and return a staged (not-yet-sent) action result."""
+        captured["path"] = request.url.path
+        captured["method"] = request.method
+        return httpx.Response(200, json={"ticket_id": 7, "status": "Drafted", "reply": None})
+
+    result = _client(handler).approve_draft(7)
+
+    assert captured["method"] == "POST"
+    assert captured["path"] == "/rep/tickets/7/approve"
+    assert result["status"] == "Drafted"
+
+
+def test_edit_draft_posts_the_edited_reply() -> None:
+    """Editing POSTs the id's edit path carrying the rep's replacement reply text."""
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        """Record the edit request and return a staged action result."""
+        captured["path"] = request.url.path
+        captured["method"] = request.method
+        captured["json"] = json.loads(request.content)
+        return httpx.Response(200, json={"ticket_id": 7, "status": "Drafted", "reply": None})
+
+    _client(handler).edit_draft(7, "Please reset from the login screen.")
+
+    assert captured["method"] == "POST"
+    assert captured["path"] == "/rep/tickets/7/edit"
+    assert captured["json"] == {"reply": "Please reset from the login screen."}
+
+
+def test_send_draft_posts_the_rep_marker_and_returns_the_reply() -> None:
+    """Sending POSTs the id's send path with the rep marker and returns the sent reply."""
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        """Record the send request and return a Resolved result with the reply."""
+        captured["path"] = request.url.path
+        captured["json"] = json.loads(request.content)
+        return httpx.Response(
+            200, json={"ticket_id": 7, "status": "Resolved", "reply": "Use the login screen."}
+        )
+
+    result = _client(handler).send_draft(7, "rep-1")
+
+    assert captured["path"] == "/rep/tickets/7/send"
+    assert captured["json"] == {"rep_id": "rep-1"}
+    assert result["status"] == "Resolved"
+    assert result["reply"] == "Use the login screen."
+
+
+def test_reject_draft_posts_the_marker_and_optional_reason() -> None:
+    """Rejecting POSTs the id's reject path with the rep marker and a reason."""
+    captured: dict[str, Any] = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        """Record the reject request and return a NeedsResearch result."""
+        captured["path"] = request.url.path
+        captured["json"] = json.loads(request.content)
+        return httpx.Response(200, json={"ticket_id": 7, "status": "NeedsResearch", "reply": None})
+
+    result = _client(handler).reject_draft(7, "rep-3", reason="needs a second source")
+
+    assert captured["path"] == "/rep/tickets/7/reject"
+    assert captured["json"] == {"rep_id": "rep-3", "reason": "needs a second source"}
+    assert result["status"] == "NeedsResearch"

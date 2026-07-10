@@ -160,6 +160,68 @@ def test_rep_ticket_detail_requires_auth(client: TestClient) -> None:
     assert response.status_code == 401
 
 
+# --- Draft-review payload: GET /rep/tickets/{id}/review (plan Task 19) --------
+
+
+async def test_rep_review_returns_draft_facts_and_sources(
+    build_paused_workflow: Any,
+    rep_client: Any,
+    auth_headers: dict[str, str],
+) -> None:
+    """The review endpoint projects the paused graph state into a rep-review payload.
+
+    A case sitting at the human-review pause exposes exactly what the rep workspace
+    renders: the original message, the triage classification, the retrieved KB sources,
+    and the drafted (here verified, unflagged) reply — read straight from the paused
+    checkpoint, not from the email_mcp ticket record.
+    """
+    graph = await build_paused_workflow(ticket_id=7)
+
+    async with rep_client(graph) as ac:
+        review = await ac.get("/rep/tickets/7/review", headers=auth_headers)
+
+    assert review.status_code == 200
+    body = review.json()
+    assert body["ticket_id"] == 7
+    assert body["status"] == "Drafted"
+    assert body["message"] == "How do I reset my online banking password?"
+    assert body["triage"]["category"] == "account_access"
+    assert [source["id"] for source in body["sources"]] == ["KB-1"]
+    assert body["draft"]["body"] == HAPPY_DRAFT_BODY
+    assert body["draft"]["verified"] is True
+    assert body["trace_leak"] is False
+    assert body["flags"] == []
+
+
+async def test_rep_review_on_a_ticket_not_awaiting_review_is_conflict(
+    build_paused_workflow: Any,
+    rep_client: Any,
+    auth_headers: dict[str, str],
+) -> None:
+    """A ticket with no run paused at the gate is refused with 409, not a blank payload.
+
+    The review payload only exists while a case is interrupted before `human_review`;
+    an id with no such checkpoint gets the same 409 the rep-action routes give, rather
+    than a 200 carrying an empty draft.
+    """
+    graph = await build_paused_workflow(ticket_id=7)
+
+    async with rep_client(graph) as ac:
+        review = await ac.get("/rep/tickets/999/review", headers=auth_headers)
+
+    assert review.status_code == 409
+
+
+async def test_rep_review_requires_auth(build_paused_workflow: Any, rep_client: Any) -> None:
+    """The review payload is not readable without a bearer token."""
+    graph = await build_paused_workflow(ticket_id=7)
+
+    async with rep_client(graph) as ac:
+        review = await ac.get("/rep/tickets/7/review")
+
+    assert review.status_code == 401
+
+
 # --- Draft-review actions: edit / approve / reject / send (plan Task 17) ------
 
 

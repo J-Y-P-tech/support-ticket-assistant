@@ -75,6 +75,53 @@ class ApiClient:
         response.raise_for_status()
         return _json_dict(response)
 
+    def fetch_review(self, ticket_id: int) -> dict[str, Any]:
+        """Return the draft-review payload for a ticket paused at the human gate.
+
+        The payload (message, triage, sources, draft, warning flags) the rep workspace
+        renders; only valid while the case is awaiting review (the api answers 409
+        otherwise, surfaced here as an error rather than an empty draft).
+        """
+        response = self._client.get(f"/rep/tickets/{ticket_id}/review")
+        response.raise_for_status()
+        return _json_dict(response)
+
+    def approve_draft(self, ticket_id: int) -> dict[str, Any]:
+        """Stage an approve-as-is decision on the paused case (does not send)."""
+        response = self._client.post(f"/rep/tickets/{ticket_id}/approve")
+        response.raise_for_status()
+        return _json_dict(response)
+
+    def edit_draft(self, ticket_id: int, reply: str) -> dict[str, Any]:
+        """Stage the rep's edited reply into the paused case (held until send)."""
+        response = self._client.post(f"/rep/tickets/{ticket_id}/edit", json={"reply": reply})
+        response.raise_for_status()
+        return _json_dict(response)
+
+    def send_draft(self, ticket_id: int, rep_id: str) -> dict[str, Any]:
+        """Send the approved/edited reply: the api resumes through finalize and persists it.
+
+        `rep_id` is the audit marker the api requires to resolve the case (SPEC §4.7).
+        Returns the action result carrying the sent reply and the Resolved status.
+        """
+        response = self._client.post(f"/rep/tickets/{ticket_id}/send", json={"rep_id": rep_id})
+        response.raise_for_status()
+        return _json_dict(response)
+
+    def reject_draft(
+        self, ticket_id: int, rep_id: str, reason: str | None = None
+    ) -> dict[str, Any]:
+        """Reject the draft: route the case back for research with nothing sent.
+
+        `rep_id` attributes the rejection in the audit trail; `reason` is an optional
+        note carried alongside it.
+        """
+        response = self._client.post(
+            f"/rep/tickets/{ticket_id}/reject", json={"rep_id": rep_id, "reason": reason}
+        )
+        response.raise_for_status()
+        return _json_dict(response)
+
 
 def _json_dict(response: httpx.Response) -> dict[str, Any]:
     """Return the response's JSON body typed as a dict."""

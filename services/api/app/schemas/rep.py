@@ -10,9 +10,12 @@ is a 422 at the boundary, never a silent send. Per-rep identity is not modelled 
 
 from __future__ import annotations
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
+from app.schemas.draft import Draft
 from app.schemas.enums import TicketStatus
+from app.schemas.kb import KBSource
+from app.schemas.triage import TriageResult
 
 
 class RepEditRequest(BaseModel):
@@ -56,6 +59,31 @@ class RepRejectRequest(BaseModel):
         if not value.strip():
             raise ValueError("rep_id must not be empty")
         return value
+
+
+class RepReview(BaseModel):
+    """The draft-review payload a rep opens: the paused run projected for the workspace.
+
+    Assembled from the LangGraph state while a case is interrupted before `human_review`
+    (SPEC §4.7) — it is not the email_mcp ticket record. It gathers everything the rep
+    weighs before dispositioning the AI draft: the original `message`, the OCR
+    `extracted_facts` (`None` for text-only tickets), the `triage` classification, the
+    retrieved KB `sources`, the `draft` itself (with its citations and `verified` flag),
+    and the human-facing signals — `flags` (the accumulated plain-language warnings) and
+    `trace_leak`. Every pipeline product is optional because a case can reach the gate
+    early (a blocked injection, an unclassifiable ticket, a no-source hand-off) with no
+    draft ever written.
+    """
+
+    ticket_id: int
+    status: TicketStatus
+    message: str
+    extracted_facts: str | None = None
+    triage: TriageResult | None = None
+    sources: list[KBSource] = Field(default_factory=list)
+    draft: Draft | None = None
+    flags: list[str] = Field(default_factory=list)
+    trace_leak: bool = False
 
 
 class RepActionResult(BaseModel):

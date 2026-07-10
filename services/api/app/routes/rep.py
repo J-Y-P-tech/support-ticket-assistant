@@ -34,6 +34,7 @@ from app.schemas.rep import (
     RepActionResult,
     RepEditRequest,
     RepRejectRequest,
+    RepReview,
     RepSendRequest,
 )
 from app.schemas.ticket import QueuePage, QueueRow
@@ -112,6 +113,34 @@ async def _require_review_pause(workflow: CompiledStateGraph, ticket_id: int) ->
             status_code=status.HTTP_409_CONFLICT, detail="Ticket is not awaiting review"
         )
     return snapshot
+
+
+@router.get("/tickets/{ticket_id}/review", response_model=RepReview)
+async def rep_ticket_review(
+    ticket_id: int,
+    workflow: CompiledStateGraph = Depends(get_workflow),
+) -> RepReview:
+    """Return the draft-review payload for a case paused at the human gate.
+
+    Projects the paused run's state (the message, triage, retrieved KB sources, draft,
+    and the accumulated review flags) into the shape the rep workspace renders. Refuses
+    with 409 when the ticket is not awaiting review — the review payload only exists
+    while the run is interrupted before `human_review`.
+    """
+    snapshot = await _require_review_pause(workflow, ticket_id)
+    values = snapshot.values
+    kb_result = values.get("kb_result")
+    return RepReview(
+        ticket_id=ticket_id,
+        status=values["status"],
+        message=values["message"],
+        extracted_facts=values.get("extracted_facts"),
+        triage=values.get("triage"),
+        sources=kb_result.sources if kb_result is not None else [],
+        draft=values.get("draft"),
+        flags=values.get("flags", []),
+        trace_leak=values.get("trace_leak", False),
+    )
 
 
 @router.post("/tickets/{ticket_id}/edit", response_model=RepActionResult)
