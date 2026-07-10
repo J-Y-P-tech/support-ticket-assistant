@@ -28,10 +28,10 @@ Order is dependency-correct; do not start a task before its dependencies are che
 ## Phase 4 — Retrieval + grounded drafting
 - [x] **12.** retrieve node + groundedness gate — *deps: 9,11*
 - [x] **13.** draft node (grounded, cited; unverified flag) — *deps: 12*
-- [ ] **14.** validate node (schema + groundedness scorer) — *deps: 13*
+- [x] **14.** validate node (schema + groundedness scorer) — *deps: 13*
 
 ## Phase 5 — Guardrails
-- [ ] **15.** input guards: prompt-injection screening — *deps: 10*
+- [x] **15.** input guards: prompt-injection screening — *deps: 10*
 - [ ] **16.** output guards: forbidden promises / PII / tone — *deps: 13*
 
 ## Phase 6 — Workflow assembly + human-in-the-loop

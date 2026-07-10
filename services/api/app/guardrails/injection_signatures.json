@@ -1,0 +1,40 @@
+{
+  "note": "Deterministic prompt-injection signatures for the input guard (Layer 1). Edit this file to add, tune, or remove signatures WITHOUT a code change: injection.py loads and compiles it at startup. Each family has a snake_case `category` (the label surfaced on a flag), a human `description`, and a list of `patterns` — case-insensitive Python regular expressions. Remember JSON escaping: a regex backslash is written as `\\` here (so `\\s+` is the regex `\\s+`). Any change here is a security control: add a test in test_guard_injection.py and get it reviewed.",
+  "families": [
+    {
+      "category": "instruction_override",
+      "description": "Telling the assistant to ignore, override, or discard its prior instructions.",
+      "patterns": [
+        "(?:ignore|disregard|forget|override|bypass)\\s+(?:all\\s+|any\\s+|the\\s+|these\\s+)?(?:of\\s+)?(?:your\\s+|the\\s+)?(?:previous|prior|above|earlier|preceding|foregoing|last|initial)\\s+(?:instructions?|prompts?|messages?|directives?|rules?|commands?)"
+      ]
+    },
+    {
+      "category": "system_prompt_exfiltration",
+      "description": "Trying to reveal, print, or repeat the system prompt / hidden instructions.",
+      "patterns": [
+        "(?:reveal|show|print|repeat|display|output|leak|expose|reproduce|tell\\s+me|give\\s+me)\\s+(?:me\\s+|us\\s+|the\\s+)?(?:system\\s+prompt|system\\s+message|initial\\s+instructions|original\\s+instructions|your\\s+system\\s+prompt|your\\s+instructions|your\\s+prompt|your\\s+rules|your\\s+guidelines)"
+      ]
+    },
+    {
+      "category": "role_manipulation",
+      "description": "Assigning the assistant a new role, persona, or unlocked 'mode'.",
+      "patterns": [
+        "you\\s+are\\s+now\\b|act\\s+as\\s+(?:an?\\s+|if\\b)|pretend\\s+(?:to\\s+be|you\\s+are|that\\s+you)|roleplay\\s+as|developer\\s+mode|dan\\s+mode|\\bjailbreak\\b|ignore\\s+your\\s+(?:training|programming|guidelines|guardrails)"
+      ]
+    },
+    {
+      "category": "fake_role_marker",
+      "description": "Forged chat-role delimiters used to smuggle a fake system/assistant turn.",
+      "patterns": [
+        "<\\|im_(?:start|end)\\|>|###\\s*(?:system|assistant|user)\\b|\\[/?(?:system|inst)\\]|<</?sys>>|\\[system\\s+prompt\\]"
+      ]
+    },
+    {
+      "category": "instruction_termination",
+      "description": "Declaring the real instructions over and injecting a new set.",
+      "patterns": [
+        "end\\s+of\\s+(?:instructions|prompt|system\\s+prompt)|(?:new|updated|revised)\\s+instructions\\s*:|begin\\s+new\\s+instructions"
+      ]
+    }
+  ]
+}
