@@ -127,6 +127,35 @@ USER TEXT:
 
 JSON:"""
 
+# Output tone guard — LLM second opinion (plan Task 15 / todo Task 16). `{draft}` is
+# the drafted reply under screening. This is the output guard's *optional* Layer 2: a
+# deterministic signature floor reliably catches the objective violations (forbidden
+# promises, PII leakage) and short-circuits, so this classifier runs only when the floor
+# is clean and makes the one judgement the signatures cannot — tone. It judges tone
+# ALONE; promises, facts, and PII are handled by the floor and the validate node, so the
+# classifier is told not to re-litigate them.
+_OUTPUT_GUARD = """\
+You are a communications reviewer for a financial institution's support desk. Decide \
+whether the DRAFT REPLY below has a tone problem — rude, dismissive, sarcastic, \
+condescending, or blaming the customer.
+
+Judge tone ONLY. Do not judge whether the facts are correct, whether it makes promises, \
+or whether it contains personal data — those are checked separately. A polite, clear, \
+empathetic reply is NOT a violation. When unsure, do not flag.
+
+Respond with a single JSON object and nothing else, using exactly these keys:
+- "has_violation": true or false.
+- "categories": a list of short snake_case labels for the tone problems you found (for \
+example "rude", "dismissive", "condescending", "blaming"); an empty list when \
+has_violation is false.
+- "evidence": a list of short quoted snippets from the DRAFT REPLY that show the problem; \
+an empty list when has_violation is false.
+
+DRAFT REPLY:
+{draft}
+
+JSON:"""
+
 # The registry. New node prompts are added here (name -> template), keeping every
 # prompt in one place. Names are the seam's public contract, shared with Langfuse
 # when Task 28 lands.
@@ -135,6 +164,7 @@ _PROMPTS: dict[str, str] = {
     "draft": _DRAFT,
     "validate": _VALIDATE,
     "input_guard": _INPUT_GUARD,
+    "output_guard": _OUTPUT_GUARD,
 }
 
 

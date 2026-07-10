@@ -1,0 +1,27 @@
+{
+  "note": "Deterministic output-guard signatures (Layer 1) for the drafted reply. Edit this file to add, tune, or remove signatures WITHOUT a code change: output.py loads and compiles it at startup. Each family has a snake_case `category` (the label surfaced on a flag), a human `description`, a list of `patterns` (case-insensitive Python regular expressions), and an optional `redact` flag. When `redact` is true the matched snippet is MASKED to its last four digits before it is recorded as evidence, so a flag never carries a raw account/card number into the verdict, logs, or audit trail (SPEC §5/§7). Remember JSON escaping: a regex backslash is written as `\\` here (so `\\s+` is the regex `\\s+`). Any change here is a safety control: add a test in test_guard_output.py and get it reviewed.",
+  "families": [
+    {
+      "category": "forbidden_promise",
+      "description": "Financial or legal commitments the assistant must not make without a human: guarantees, personal promises, unconditional refund/reimbursement commitments, definite assurances, and accepting liability (SPEC §4.6).",
+      "patterns": [
+        "\\b(?:we|i)\\s+(?:can\\s+)?(?:guarantee|promise|assure\\s+you)\\b",
+        "\\bguaranteed\\b",
+        "\\b(?:we|you|i)\\s+will\\s+(?:definitely|certainly|absolutely|for\\s+sure)\\b",
+        "\\b(?:we|i)\\s+will\\s+(?:refund|reimburse|repay|compensate)\\b",
+        "\\byou\\s+will\\s+(?:receive|get|be\\s+issued)\\s+(?:a\\s+)?(?:full\\s+)?(?:refund|reimbursement|compensation)\\b",
+        "\\byour\\s+(?:refund|claim|dispute|loan|application)\\s+(?:has\\s+been|is)\\s+(?:approved|guaranteed|confirmed)\\b",
+        "\\b(?:we|i)\\s+(?:accept|assume|take)\\s+(?:full\\s+)?(?:liability|responsibility)\\b"
+      ]
+    },
+    {
+      "category": "pii_leak",
+      "description": "Sensitive personal identifiers leaking into the reply: full card/account numbers (13-19 digits, optionally grouped by spaces or dashes) and US Social Security numbers. Evidence is masked to the last four digits. A short 'ending in 1234' reference is only four digits and does not match.",
+      "redact": true,
+      "patterns": [
+        "\\b(?:\\d[ -]?){13,19}\\b",
+        "\\b\\d{3}-\\d{2}-\\d{4}\\b"
+      ]
+    }
+  ]
+}
