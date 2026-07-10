@@ -10,19 +10,17 @@ from __future__ import annotations
 
 from typing import Any
 
-from providers.base import SOURCE_KIND_AUTHORITATIVE, KBProvider
+from providers.base import KBProvider
 
 
 def run_search(provider: KBProvider, query: str, limit: int) -> dict[str, Any]:
     """Run the active provider and attach the no-confident-source signal.
 
     Returns the tool payload: `sources` (ranked `KBSource` dicts, possibly empty)
-    and `no_confident_source` — True when no *authoritative* source matched, which
+    and `no_confident_source` — True when the provider surfaced no source, which
     routes the case to needs-human-research rather than a drafted answer (SPEC
-    §4.4). A `model_generated` fallback never clears this flag (SPEC §4.5).
+    §4.4). Every returned source is an eligible, citable answer, so any non-empty
+    result clears the flag.
     """
     sources = provider.search(query, limit=limit)
-    no_confident_source = not any(
-        source["source_kind"] == SOURCE_KIND_AUTHORITATIVE for source in sources
-    )
-    return {"sources": sources, "no_confident_source": no_confident_source}
+    return {"sources": sources, "no_confident_source": not sources}

@@ -61,8 +61,8 @@ repo scaffold + config + compose skeleton  (Task 1)
 
 - Postgres (not Mongo); LangChain + LangGraph; **two** MCP servers; single multimodal
   `gemma4:12b` for vision **and** text (`LLM_MODEL` in `.env`).
-- KB = pluggable connector, **mock provider only, no RAG/vectors**; drafts phrase from
-  `authoritative` sources and cite them; `model_generated` never counts as grounding.
+- KB = pluggable connector, **mock provider only, no RAG/vectors**; every KB source is an
+  eligible, citable answer — drafts phrase from them and cite them.
 - Simulated send; reference-code (`TKT-####`) customer lookup; human approval is a hard
   state-machine invariant.
 - TDD-first for **all** logic including frontend; every service dir has its own `tests/`.

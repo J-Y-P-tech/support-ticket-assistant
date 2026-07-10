@@ -2,8 +2,8 @@
 
 These tests pin the Task 2 acceptance criteria (plan Task 2):
 - `Urgency` and `TicketStatus` match SPEC §4.3 / §5 *exactly* (values and spelling).
-- `SourceKind`, `Category`, `Sentiment`, and `FeedbackDecision` expose the agreed
-  value sets, and every enum rejects an unknown value.
+- `Category`, `Sentiment`, and `FeedbackDecision` expose the agreed value sets, and
+  every enum rejects an unknown value.
 
 The value sets are asserted here — rather than in each model's test — so the
 contract that the rest of the system shares has a single, explicit source of truth.
@@ -19,7 +19,6 @@ from app.schemas.enums import (
     Category,
     FeedbackDecision,
     Sentiment,
-    SourceKind,
     TicketStatus,
     Urgency,
 )
@@ -42,11 +41,6 @@ def test_ticket_status_values_match_spec() -> None:
         "Canceled",
         "NeedsResearch",
     ]
-
-
-def test_source_kind_values_match_spec() -> None:
-    """`SourceKind` is exactly authoritative/model_generated (SPEC §4.4)."""
-    assert [k.value for k in SourceKind] == ["authoritative", "model_generated"]
 
 
 def test_category_values_match_agreement() -> None:
@@ -78,7 +72,6 @@ def test_feedback_decision_values_match_spec() -> None:
     [
         (Urgency, "urgent"),
         (TicketStatus, "new"),  # wrong case: must be "New"
-        (SourceKind, "trusted"),
         (Category, "billing"),  # not in the agreed set (payments_billing)
         (Sentiment, "angry"),
         (FeedbackDecision, "approved"),

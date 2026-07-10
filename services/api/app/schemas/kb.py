@@ -4,29 +4,27 @@ from __future__ import annotations
 
 from pydantic import BaseModel
 
-from app.schemas.enums import SourceKind
-
 
 class KBSource(BaseModel):
     """A ranked KB chunk the agent may cite when drafting.
 
-    `source_kind` decides whether the chunk can ground a reply: only
-    `authoritative` sources count; `model_generated` never does (SPEC §4.5).
+    Every chunk the KB returns is an eligible, citable source — the provider only
+    ever surfaces authoritative answers (SPEC §4.4), so there is no provenance flag
+    to weigh here.
     """
 
     id: str
     title: str
     text: str
-    source_kind: SourceKind
 
 
 class KBSearchResult(BaseModel):
     """The kb client's typed reply: ranked sources plus the grounding signal.
 
-    `no_confident_source` is carried explicitly, not inferred from an empty
-    `sources` list: a `model_generated` fallback can populate `sources` while
-    nothing *authoritative* matched, and that case must still route to
-    needs-human-research (SPEC §4.4 / §4.5).
+    `no_confident_source` is carried explicitly in the tool payload rather than the
+    client re-deriving it: the provider is the authority on whether it found a
+    confident match, and a no-confident result must route to needs-human-research
+    rather than a drafted answer (SPEC §4.4).
     """
 
     sources: list[KBSource]

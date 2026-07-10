@@ -41,7 +41,7 @@ the clear.
 | Customer notification | **Reference-code lookup.** On submit the customer receives a code (e.g. `TKT-1042`) and types it into a "check my case" box to see status and the final reply. |
 | Sending | **Simulated.** "Send" marks the reply saved and the case Resolved; the reply becomes visible via reference-code lookup. Nothing is emailed out. |
 | MCP servers | **Two.** (1) **Knowledge-Base MCP** — a **pluggable connector/gateway** exposing `search_knowledge_base`, with a swappable provider interface (open door to plug real KB systems in via API later). (2) **Email/Ticket MCP** exposes ticket operations (`fetch_new_tickets`, `get_ticket`, `save_draft`, `record_sent_reply`, `update_status`) and is the sole owner of the ticket tables. |
-| KB provider (demo) | **Mock-KB provider**: a curated list of canned help answers matched by simple lookup and returned as **citable sources**. gemma4 only *phrases* the reply from the matched source — it is never the source. **No RAG / no vectors** in this project (deliberately deferred to a future project). Replies with no real source are labeled "AI-suggested, unverified". |
+| KB provider (demo) | **Mock-KB provider**: a curated list of canned help answers matched by simple lookup and returned as **citable sources** — every source it returns is an eligible, citable answer. gemma4 only *phrases* the reply from the matched source — it is never the source. **No RAG / no vectors** in this project (deliberately deferred to a future project). A draft that drifts from its source (low groundedness) is flagged "AI-suggested, unverified". |
 | Attachments | OCR the file, then LLM structured extraction of key facts (doc type, amounts, dates, names, references) feeds classification and drafting. |
 | Storage | **PostgreSQL** running as a Docker service. |
 | LLM (single, multimodal) | Ollama model tag **`gemma4:12b`** used for **everything** — vision/OCR of attachments *and* all text reasoning (triage, extraction, drafting, phrasing). Runs on the host (outside Docker), reached via `host.docker.internal`. The tag is a single config value in `.env` (`LLM_MODEL`) so it can be swapped later. No separate OCR model. |
@@ -147,23 +147,21 @@ Digitization is a **three-pass flow** (all passes use the one model, `gemma4:12b
 ### 4.4 Knowledge retrieval (MCP connector)
 - Given a triaged ticket, when the agent calls `search_knowledge_base` with the **fused search
   query** (§4.2 pass 3 — customer question + attachment summary), then it receives matching
-  **sources ("chunks")** from the active provider. Each source carries an `id`, `title`, `text`,
-  and a `source_kind` (`authoritative` for the mock-KB canned answers, or `model_generated` if a
-  future/fallback provider has no real source).
+  **sources ("chunks")** from the active provider. Each source carries an `id`, `title`, and
+  `text`; every source the provider returns is an eligible, citable answer.
 - The tool contract already returns ranked chunks, so a future provider can do real embedding
   search behind the same interface with no change to the agent (the demo provider does keyword
   lookup; **no RAG/vectors in this project**).
 - Acceptance: when the mock-KB provider finds no match, the tool returns "no confident source,"
-  which routes the case to a **needs-human-research** flag rather than a drafted answer. A
-  `model_generated` source never counts as authoritative grounding (see 4.5).
+  which routes the case to a **needs-human-research** flag rather than a drafted answer.
 
 ### 4.5 Grounded drafting
-- Given `authoritative` sources, when the agent drafts, then the reply is written **only** from
-  those sources and includes citations (which source `id`/`title` it used). gemma4 phrases the
-  answer from the source; it is never the source itself.
-- Acceptance: a groundedness check runs on the draft; low groundedness, or a draft built on a
-  `model_generated` source, is flagged for the rep as **"AI-suggested, unverified"** with a
-  warning banner and cannot be presented as sourced fact.
+- Given retrieved sources, when the agent drafts, then the reply is written **only** from those
+  sources and includes citations (which source `id`/`title` it used). gemma4 phrases the answer
+  from the source; it is never the source itself.
+- Acceptance: a groundedness check runs on the draft; low groundedness — the model drifting off
+  its cited sources — is flagged for the rep as **"AI-suggested, unverified"** with a warning
+  banner and cannot be presented as sourced fact.
 
 ### 4.6 Guardrails & validation
 - Every draft passes output guardrails before reaching the rep: no invented policies/facts, no
@@ -233,7 +231,7 @@ State machine, persisted via a Postgres checkpointer (resumable across the human
 3. `triage` — category + urgency + sentiment (validated).
 4. `retrieve` — KB MCP connector `search_knowledge_base` called with the **fused query** (mock-KB
    provider returns ranked chunks).
-5. `groundedness_gate` — authoritative source found? if not → `flag_needs_research`.
+5. `groundedness_gate` — source found? if not → `flag_needs_research`.
 6. `draft` — grounded reply with citations; prompt resolved from Langfuse + dynamic few-shot (§4.10).
 7. `validate` — schema + guardrails (PII, forbidden promises, tone, groundedness score). PII (Personally Identifiable Information).
 8. `human_review` — **interrupt / pause** for the rep.
@@ -291,7 +289,7 @@ Ordered gates every ticket passes; a failure at any gate flags or stops rather t
 silently:
 1. **Input gate** — validation + prompt-injection screening on customer text and OCR transcription.
 2. **Structured-output validation** — every LLM output validated against Pydantic; retry on failure.
-3. **Grounding gate** — no authoritative source → needs-human-research; model-generated → unverified.
+3. **Grounding gate** — no source found → needs-human-research.
 4. **Output guardrails** — PII, forbidden financial/legal promises, tone, groundedness/faithfulness.
 5. **Human gate** — rep approval mandatory (hard state-machine invariant; nothing sends without it).
 6. **Observability gate** — every run traced in Langfuse; latency/token/cost + guardrail trips visible.

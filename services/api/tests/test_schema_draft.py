@@ -1,10 +1,9 @@
 """Unit tests for `Draft` and `Citation` (`app.schemas`).
 
-Pins the grounded-drafting contract (SPEC §4.5): a draft is written from
-authoritative sources and cites which source `id`/`title` it used; a draft built
-on a `model_generated` source (or otherwise low-groundedness) is flagged
-"AI-suggested, unverified" via `verified=False` and cannot be presented as
-sourced fact.
+Pins the grounded-drafting contract (SPEC §4.5): a draft is written from its
+sources and cites which source `id`/`title` it used; a draft with low groundedness
+(the model drifting off its sources) is flagged "AI-suggested, unverified" via
+`verified=False` and cannot be presented as sourced fact.
 """
 
 from __future__ import annotations
@@ -38,7 +37,7 @@ def test_draft_defaults_to_no_citations_and_verified_true() -> None:
 
 
 def test_unverified_draft_carries_the_flag() -> None:
-    """A model-generated/low-groundedness draft records `verified=False` (SPEC §4.5)."""
+    """A low-groundedness draft records `verified=False` (SPEC §4.5)."""
     draft = Draft(body="best-effort answer", verified=False)
 
     assert draft.verified is False

@@ -44,6 +44,8 @@ class Settings(BaseSettings):
 
     # --- Agent node behaviour (tuning knobs) ---
     triage_max_attempts: int  # model tries for a valid TriageResult before human hand-off
+    groundedness_min: float  # min judge groundedness score before a draft is flagged unverified
+    validate_max_attempts: int  # judge tries for a valid GroundednessVerdict before failing closed
 
     # --- Inter-service auth: a separate bearer token per connection (least privilege, SPEC §6) ---
     api_auth_token: SecretStr  # presented by the frontend to this api

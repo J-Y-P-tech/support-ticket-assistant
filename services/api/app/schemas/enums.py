@@ -1,9 +1,9 @@
 """Shared enumerations for triage, ticket lifecycle, sources, and feedback.
 
 These are the single source of truth for the closed value sets the whole system
-exchanges. `Urgency`, `TicketStatus`, `SourceKind`, and `FeedbackDecision` are
-copied verbatim from SPEC (§4.3, §5, §4.4, §4.9). `Category` and `Sentiment` are
-not enumerated in SPEC; their values were confirmed with the user (2026-07-06).
+exchanges. `Urgency`, `TicketStatus`, and `FeedbackDecision` are copied verbatim
+from SPEC (§4.3, §5, §4.9). `Category` and `Sentiment` are not enumerated in SPEC;
+their values were confirmed with the user (2026-07-06).
 
 Every enum is a `StrEnum`, so a value serializes to its plain string in JSON and
 compares equal to that string, while still validating a closed set on input.
@@ -37,17 +37,6 @@ class TicketStatus(StrEnum):
     RESOLVED = "Resolved"
     CANCELED = "Canceled"
     NEEDS_RESEARCH = "NeedsResearch"
-
-
-class SourceKind(StrEnum):
-    """Provenance of a KB source (SPEC §4.4).
-
-    `AUTHORITATIVE` chunks may ground a draft; `MODEL_GENERATED` chunks never
-    count as grounding and force the "AI-suggested, unverified" path (SPEC §4.5).
-    """
-
-    AUTHORITATIVE = "authoritative"
-    MODEL_GENERATED = "model_generated"
 
 
 class Category(StrEnum):

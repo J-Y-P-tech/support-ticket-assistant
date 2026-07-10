@@ -26,6 +26,8 @@ _COMPLETE_ENV: dict[str, str] = {
     "QUEUE_PAGE_DEFAULT": "50",
     "QUEUE_PAGE_MAX": "200",
     "TRIAGE_MAX_ATTEMPTS": "2",
+    "GROUNDEDNESS_MIN": "0.6",
+    "VALIDATE_MAX_ATTEMPTS": "2",
     "API_AUTH_TOKEN": "frontend-to-api-token",
     "EMAIL_MCP_URL": "http://email_mcp:8000",
     "EMAIL_MCP_TOKEN": "api-to-email-token",
@@ -63,6 +65,8 @@ def test_loads_all_values_from_env(full_env: None) -> None:
     assert settings.queue_page_default == 50
     assert settings.queue_page_max == 200
     assert settings.triage_max_attempts == 2
+    assert settings.groundedness_min == 0.6
+    assert settings.validate_max_attempts == 2
 
 
 def test_secrets_are_secretstr(full_env: None) -> None:

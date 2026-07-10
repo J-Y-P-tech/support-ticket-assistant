@@ -32,6 +32,17 @@ def test_triage_template_exposes_expected_placeholders() -> None:
         assert placeholder in template
 
 
+def test_validate_template_exposes_expected_placeholders() -> None:
+    """The groundedness-judge template carries the placeholders the validate node fills.
+
+    Guards the seam's contract with the node: if `{draft}` or `{sources}` is renamed
+    here the node's `.format(...)` would raise, and this test catches it first.
+    """
+    template = get_prompt("validate")
+    for placeholder in ("{draft}", "{sources}"):
+        assert placeholder in template
+
+
 def test_unknown_prompt_name_raises() -> None:
     """An unregistered name raises `KeyError` instead of returning an empty prompt."""
     with pytest.raises(KeyError):

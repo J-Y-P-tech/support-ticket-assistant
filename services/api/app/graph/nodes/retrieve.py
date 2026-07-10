@@ -3,16 +3,16 @@
 Two steps sit between triage and drafting. `retrieve` asks the kb client for
 sources for the (fused) search query and hands back the typed `KBSearchResult`
 untouched. `groundedness_gate` then decides the path: a case may only proceed to
-`draft` when the KB returned a genuinely **authoritative** source; otherwise it is
-routed to `flag_needs_research` for a human, never a drafted answer (SPEC §4.4).
+`draft` when the KB returned a source; otherwise it is routed to
+`flag_needs_research` for a human, never a drafted answer (SPEC §4.4).
 
-The gate enforces the project's grounding rule: only `authoritative` sources count.
-A `model_generated` fallback never grounds a reply (SPEC §4.5) — so a result that
-carries only model-generated sources, or that flags `no_confident_source`, or that
-is empty, all route to research. This mirrors the committed kb client contract
-(`app/mcp_clients/kb.py`): the no-confident-source signal is carried explicitly and
-is not the only trigger — the gate independently refuses to draft without an
-authoritative source.
+Every source the KB returns is an eligible, citable answer (the provider surfaces
+nothing else), so the gate's rule is simply: draft only when the KB found a
+confident source. A result that flags `no_confident_source`, or that is empty,
+routes to research. The gate does not trust the flag alone — it independently
+refuses to draft with no source in hand, mirroring the committed kb client
+contract (`app/mcp_clients/kb.py`), where the no-confident-source signal is carried
+explicitly rather than inferred.
 
 Both are plain functions, independent of LangGraph; the state adapter that wraps
 `retrieve` into a node and `groundedness_gate` into a conditional edge is added when
@@ -24,7 +24,6 @@ from __future__ import annotations
 from typing import Final, Literal
 
 from app.mcp_clients.kb import KBMCPClient
-from app.schemas.enums import SourceKind
 from app.schemas.kb import KBSearchResult
 
 # The two routes the gate can pick, named for the workflow nodes they lead to
@@ -48,17 +47,16 @@ async def retrieve(query: str, kb_client: KBMCPClient) -> KBSearchResult:
 
 
 def groundedness_gate(result: KBSearchResult) -> Route:
-    """Route to `draft` only with an authoritative source; otherwise needs-research.
+    """Route to `draft` only with a confident source in hand; otherwise needs-research.
 
     Drafting is permitted **only** when the provider is confident
-    (`no_confident_source` is False) *and* at least one returned source is
-    `authoritative`. A no-confident-source signal, a result carrying only
-    `model_generated` fallbacks, or an empty source list all route to
+    (`no_confident_source` is False) *and* actually returned a source. A
+    no-confident-source signal or an empty source list routes to
     `flag_needs_research` — the case goes to a human rather than producing an
-    ungrounded answer (SPEC §4.4 / §4.5).
+    ungrounded answer (SPEC §4.4).
     """
     if result.no_confident_source:
         return FLAG_NEEDS_RESEARCH
-    if any(source.source_kind is SourceKind.AUTHORITATIVE for source in result.sources):
+    if result.sources:
         return DRAFT
     return FLAG_NEEDS_RESEARCH

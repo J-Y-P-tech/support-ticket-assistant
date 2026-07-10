@@ -3,10 +3,10 @@
 Prove the wrapper turns `search_knowledge_base`'s JSON payload into a typed
 `KBSearchResult` **without network**: ranked `KBSource` objects plus the distinct
 `no_confident_source` signal that routes a case to needs-human-research (SPEC §4.4).
-Crucially, that signal is carried explicitly — it is *not* inferred from an empty
-source list, since `model_generated` sources can be present while nothing
-authoritative matched (SPEC §4.5). The shared transport (`call_tool`) is faked here;
-it is exercised for real in `test_mcp_client_base.py`.
+Crucially, the client carries that signal through exactly as the provider set it —
+it does *not* re-derive it from the source list — so the provider stays the
+authority on confidence. The shared transport (`call_tool`) is faked here; it is
+exercised for real in `test_mcp_client_base.py`.
 """
 
 from __future__ import annotations
@@ -16,7 +16,6 @@ from typing import Any
 import pytest
 
 from app.mcp_clients.kb import KBMCPClient
-from app.schemas.enums import SourceKind
 from app.schemas.kb import KBSearchResult, KBSource
 
 
@@ -39,7 +38,6 @@ async def test_search_returns_typed_kb_sources(
                 "id": "kb-1",
                 "title": "Reset access",
                 "text": "Verify identity, then reset ...",
-                "source_kind": "authoritative",
             }
         ],
         "no_confident_source": False,
@@ -59,7 +57,6 @@ async def test_search_returns_typed_kb_sources(
             id="kb-1",
             title="Reset access",
             text="Verify identity, then reset ...",
-            source_kind=SourceKind.AUTHORITATIVE,
         )
     ]
 
@@ -80,10 +77,15 @@ async def test_search_surfaces_no_confident_source_when_empty(
     assert result.no_confident_source is True
 
 
-async def test_no_confident_source_is_distinct_from_having_sources(
+async def test_no_confident_source_is_carried_through_verbatim(
     wrapper: KBMCPClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """The flag is carried explicitly: True even when (model_generated) sources exist."""
+    """The client trusts the provider's flag: it does not re-derive it from the list.
+
+    Given a (contrived) payload where the provider reports `no_confident_source`
+    while still returning a source, the client passes the flag through unchanged
+    rather than inferring confidence from the non-empty source list.
+    """
 
     async def fake_call(tool: str, arguments: dict[str, Any], **_kwargs: Any) -> Any:
         return {
@@ -91,8 +93,7 @@ async def test_no_confident_source_is_distinct_from_having_sources(
                 {
                     "id": "kb-9",
                     "title": "Best guess",
-                    "text": "Unverified suggestion ...",
-                    "source_kind": "model_generated",
+                    "text": "A weak partial match ...",
                 }
             ],
             "no_confident_source": True,
@@ -103,8 +104,7 @@ async def test_no_confident_source_is_distinct_from_having_sources(
     result = await wrapper.search("obscure edge case")
 
     assert len(result.sources) == 1
-    assert result.sources[0].source_kind is SourceKind.MODEL_GENERATED
-    # The signal is distinct — not inferred from an empty list.
+    # The signal is carried through — not inferred from the (non-empty) list.
     assert result.no_confident_source is True
 
 

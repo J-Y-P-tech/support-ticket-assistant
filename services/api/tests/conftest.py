@@ -33,6 +33,8 @@ _TEST_ENV: dict[str, str] = {
     "QUEUE_PAGE_DEFAULT": "50",
     "QUEUE_PAGE_MAX": "200",
     "TRIAGE_MAX_ATTEMPTS": "2",
+    "GROUNDEDNESS_MIN": "0.6",
+    "VALIDATE_MAX_ATTEMPTS": "2",
     "API_AUTH_TOKEN": TEST_API_TOKEN,
     "EMAIL_MCP_URL": "http://email_mcp:8000/mcp",
     "EMAIL_MCP_TOKEN": "api-to-email-token",

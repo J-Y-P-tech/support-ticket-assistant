@@ -1,9 +1,9 @@
 """Mock-KB provider: keyword lookup over curated canned answers (SPEC §4.4, §14.2).
 
 Ships as the demo `KBProvider`. The curated answers live as JSON files in
-`services/kb_mcp/mock_kb/`; each becomes an `authoritative` citable source when
-its indexed terms overlap the search query. No RAG / no vectors — a real
-embedding provider is a future drop-in behind the same interface (SPEC §14.1).
+`services/kb_mcp/mock_kb/`; each becomes a citable source when its indexed terms
+overlap the search query. No RAG / no vectors — a real embedding provider is a
+future drop-in behind the same interface (SPEC §14.1).
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from providers.base import SOURCE_KIND_AUTHORITATIVE, KBProvider
+from providers.base import KBProvider
 
 # Curated answer files (the "mock RAG" source data) sit alongside the service,
 # one directory up from the providers package (SPEC §14.2).
@@ -122,12 +122,11 @@ def _load_articles(data_dir: Path) -> list[dict[str, Any]]:
 
 
 def _to_source(raw: dict[str, Any]) -> dict[str, Any]:
-    """Project a curated answer into a `KBSource`-shaped, authoritative dict."""
+    """Project a curated answer into a `KBSource`-shaped dict."""
     return {
         "id": raw["id"],
         "title": raw["title"],
         "text": raw["text"],
-        "source_kind": SOURCE_KIND_AUTHORITATIVE,
     }
 
 

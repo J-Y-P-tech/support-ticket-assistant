@@ -47,9 +47,9 @@ def search_knowledge_base(query: str, limit: int = DEFAULT_LIMIT) -> dict[str, A
     """Search the knowledge base for sources that can ground a reply.
 
     `query` is the fused customer-question + attachment-summary search string
-    (SPEC §4.2/§4.4). Returns ranked sources (`id`, `title`, `text`,
-    `source_kind`) plus `no_confident_source`: True when nothing authoritative
-    matched, which routes the case to needs-human-research (SPEC §4.4).
+    (SPEC §4.2/§4.4). Returns ranked sources (`id`, `title`, `text`) plus
+    `no_confident_source`: True when nothing matched, which routes the case to
+    needs-human-research (SPEC §4.4).
     """
     return kb_search.run_search(_provider, query, limit=limit)
 

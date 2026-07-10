@@ -11,14 +11,6 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any
 
-# Provenance strings a provider stamps on each source. These mirror
-# `app.schemas.enums.SourceKind`; kb_mcp's runtime image stays free of the shared
-# `app` package (the MCP boundary carries plain JSON, like email_mcp), so the
-# values are declared here and kept honest by the contract tests, which validate
-# every returned source against the shared `KBSource` schema.
-SOURCE_KIND_AUTHORITATIVE = "authoritative"
-SOURCE_KIND_MODEL_GENERATED = "model_generated"
-
 
 class KBProvider(ABC):
     """A swappable knowledge-base backend behind `search_knowledge_base`."""
@@ -28,8 +20,8 @@ class KBProvider(ABC):
         """Return up to `limit` ranked source chunks, best match first.
 
         Each chunk is a plain dict with the `KBSource` shape (`id`, `title`,
-        `text`, `source_kind`). An empty list means the provider found no
-        confident source; a provider with only a model-generated fallback returns
-        chunks marked `model_generated`, which never count as grounding (SPEC §4.5).
+        `text`) — every returned chunk is an eligible, citable source. An empty
+        list means the provider found no confident source, which routes the case to
+        needs-human-research (SPEC §4.4).
         """
         raise NotImplementedError

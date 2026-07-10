@@ -60,12 +60,44 @@ Sources:
 
 Reply:"""
 
+# Groundedness judge (plan Task 13 / todo Task 14). `{draft}` is the drafted reply;
+# `{sources}` is the rendered block of the sources it cited. The judge scores how
+# much of the reply the sources support and lists what they do not — the validate
+# node validates that JSON against `GroundednessVerdict` and flags a low score for
+# the rep (SPEC §4.5). The strictness (invented facts, wrong numbers, negations) is
+# the prompt's half of the faithfulness check.
+_VALIDATE = """\
+You are a strict fact-checking reviewer for a financial institution's support desk. \
+Judge how well the DRAFT REPLY is supported by the SOURCES — and only the sources.
+
+Rules:
+- Treat a claim as supported ONLY if a source states it. Do not credit outside \
+knowledge or common sense.
+- Watch for invented facts or figures, wrong numbers or dates, promises the sources \
+do not make, and negations that flip a source's meaning.
+- Judge factual claims, not tone or politeness.
+
+Respond with a single JSON object and nothing else, using exactly these keys:
+- "score": a number from 0.0 to 1.0 — the fraction of the reply's factual claims the \
+sources support (1.0 = every claim supported, 0.0 = none).
+- "unsupported_claims": a list of short strings, each a claim in the reply the \
+sources do not back (an empty list when every claim is supported).
+
+DRAFT REPLY:
+{draft}
+
+SOURCES:
+{sources}
+
+JSON:"""
+
 # The registry. New node prompts are added here (name -> template), keeping every
 # prompt in one place. Names are the seam's public contract, shared with Langfuse
 # when Task 28 lands.
 _PROMPTS: dict[str, str] = {
     "triage": _TRIAGE,
     "draft": _DRAFT,
+    "validate": _VALIDATE,
 }
 
 

@@ -3,17 +3,15 @@
 The drafting step sits after the groundedness gate. It phrases a reply to the
 customer **only** from the KB sources it is given and cites each one by source
 `id`/`title`, so the answer is grounded and auditable rather than free invention
-(SPEC §4.5). Two guarantees matter here:
+(SPEC §4.5). Every source the KB returns is an eligible, citable answer, so the
+draft is written from all of them and left verified; with nothing to ground from at
+all it raises rather than inventing an answer.
 
-- **Authoritative-only grounding.** When the result carries `authoritative`
-  sources, the draft is written from those alone — model_generated chunks beside
-  them are neither fed to the model nor cited — and the reply is left verified.
-- **Never present a guess as fact.** The groundedness gate normally routes a
-  result with no authoritative source to a human, so reaching `draft` with only
-  `model_generated` sources is a defensive path; the node still drafts from the
-  fallback but marks it **"AI-suggested, unverified"** (`verified=False`) so it
-  cannot be shown as sourced fact. With nothing to ground from at all, it raises
-  rather than inventing an answer.
+Being *handed* a good source is not the same as *staying faithful* to it, though —
+the model can still drift off the source. Catching that is the `validate` node's job
+(todo Task 14): it scores the draft's groundedness and downgrades `verified` to
+False when the reply wanders, flagging it "AI-suggested, unverified" for the rep. So
+a draft leaves this node verified and only the validate step may mark it otherwise.
 
 This is a plain async function, independent of LangGraph; the state adapter that
 wraps it into a graph node is added when the workflow is assembled (todo Task 17).
@@ -28,27 +26,18 @@ from __future__ import annotations
 from app.llm.base import LLM
 from app.prompts.registry import get_prompt
 from app.schemas.draft import Citation, Draft
-from app.schemas.enums import SourceKind
 from app.schemas.kb import KBSearchResult, KBSource
 
 
-# return tuple[list[KBSource], bool] — the bool is the draft's `verified` flag
-def _grounding_sources(result: KBSearchResult) -> tuple[list[KBSource], bool]:
-    """Pick the sources to draft from and whether the draft counts as verified.
+def _grounding_sources(result: KBSearchResult) -> list[KBSource]:
+    """Return the sources to draft from, raising when there are none.
 
-    Prefers `authoritative` sources — the only kind that may ground a reply
-    (SPEC §4.5) — and reports the draft as verified (True). If none are present the
-    node falls back to `model_generated` sources and reports it unverified (False),
-    so the defensive path still refuses to present a guess as sourced fact. Raises
-    `ValueError` when there is nothing at all to ground from; the groundedness gate
-    guarantees this never happens in the assembled workflow.
+    Every source in `result` is an eligible, citable answer, so the draft grounds
+    in all of them. Raises `ValueError` when there is nothing to ground from; the
+    groundedness gate guarantees this never happens in the assembled workflow.
     """
-    authoritative = [s for s in result.sources if s.source_kind is SourceKind.AUTHORITATIVE]
-    if authoritative:
-        return authoritative, True
-    model_generated = [s for s in result.sources if s.source_kind is SourceKind.MODEL_GENERATED]
-    if model_generated:
-        return model_generated, False
+    if result.sources:
+        return result.sources
     raise ValueError("cannot draft a reply: no sources to ground from")
 
 
@@ -73,14 +62,13 @@ def _build_prompt(message: str, sources: list[KBSource]) -> str:
 async def draft(message: str, result: KBSearchResult, llm: LLM) -> Draft:
     """Write a grounded, cited reply to `message` from the retrieved sources.
 
-    Drafts from the `authoritative` sources in `result` when present (`verified`),
-    otherwise from `model_generated` fallbacks (`verified=False`); either way the
-    reply is written only from the selected sources and cites each of them by
-    `id`/`title` (SPEC §4.5). Sends the in-repo draft prompt to `llm` with
-    `think=True` and wraps the returned text into a `Draft`. Raises `ValueError`
-    when `result` carries no sources to ground from.
+    Drafts from every source in `result` — each an eligible, citable answer — and
+    cites them by `id`/`title` (SPEC §4.5). Sends the in-repo draft prompt to `llm`
+    with `think=True` and wraps the returned text into a `Draft`, left verified for
+    the `validate` node (todo Task 14) to score and possibly downgrade. Raises
+    `ValueError` when `result` carries no sources to ground from.
     """
-    sources, verified = _grounding_sources(result)
+    sources = _grounding_sources(result)
     body = await llm.generate(_build_prompt(message, sources), think=True)
     citations = [Citation(source_id=source.id, title=source.title) for source in sources]
-    return Draft(body=body, citations=citations, verified=verified)
+    return Draft(body=body, citations=citations)

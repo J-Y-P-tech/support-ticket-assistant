@@ -15,10 +15,10 @@ class Citation(BaseModel):
 class Draft(BaseModel):
     """A drafted reply written from authoritative sources, awaiting rep review.
 
-    `verified` is True for a draft grounded in authoritative sources. It is False
-    for a draft built on a `model_generated` source or with low groundedness; such a
-    draft is shown as "AI-suggested, unverified" and cannot be presented as sourced
-    fact (SPEC §4.5).
+    `verified` is True for a draft that stays grounded in its cited sources. The
+    validate node (todo Task 14) sets it False when the draft's groundedness is low
+    — the model drifting off its sources; such a draft is shown as "AI-suggested,
+    unverified" and cannot be presented as sourced fact (SPEC §4.5).
     """
 
     body: str
