@@ -94,13 +94,15 @@ ignore_missing_imports = true
 module = ["langgraph.*", "langgraph_checkpoint.*"]
 ignore_missing_imports = true
 
-# `app.graph.workflow` is the thin seam that binds our typed state to LangGraph's own
+# These modules are the thin seam that binds our typed state to LangGraph's own
 # generics (`StateGraph`, `CompiledStateGraph`, `BaseCheckpointSaver`), whose type-
-# parameter arity shifts across LangGraph versions. Use those types bare here and
-# disable only the `type-arg` check for this one gluing module, so a LangGraph upgrade
-# never breaks the type gate on an arity change while the rest of the app stays strict.
+# parameter arity shifts across LangGraph versions: `workflow` assembles the graph,
+# `runtime` builds/compiles it per app, and the rep-action `routes.rep` resumes it.
+# Use those types bare in this seam and disable only the `type-arg` check here, so a
+# LangGraph upgrade never breaks the type gate on an arity change while the rest of
+# the app stays strict.
 [[tool.mypy.overrides]]
-module = ["app.graph.workflow"]
+module = ["app.graph.workflow", "app.graph.runtime", "app.routes.rep"]
 disable_error_code = ["type-arg"]
 
 [tool.pytest.ini_options]

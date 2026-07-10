@@ -1,8 +1,10 @@
-"""Route tests for the rep-facing endpoints (plan Task 4).
+"""Route tests for the rep-facing endpoints (plan Tasks 4 and 17).
 
-Covers the rep queue (SPEC §4.3/§4.7 — the New tickets awaiting work) and the
-single-ticket detail view a rep opens. Draft-review actions land in Task 17; this
-task is queue + detail read-only. The email MCP client is mocked.
+Covers the rep queue (SPEC §4.3/§4.7 — the New tickets awaiting work), the
+single-ticket detail view a rep opens, and the draft-review actions
+(edit/approve/reject/send, plan Task 17). The email MCP client is mocked; the
+rep-action tests drive the real workflow to its human-review pause and resume it
+through the routes, so the resume→finalize→persist path is exercised end to end.
 """
 
 from __future__ import annotations
@@ -11,7 +13,7 @@ from typing import Any
 
 from fastapi.testclient import TestClient
 
-from tests.conftest import FakeEmailClient
+from tests.conftest import HAPPY_DRAFT_BODY, FakeEmailClient
 
 
 def _queue_row(seq: int) -> dict[str, str | int | None]:
@@ -156,3 +158,183 @@ def test_rep_ticket_detail_requires_auth(client: TestClient) -> None:
     response = client.get("/rep/tickets/7")
 
     assert response.status_code == 401
+
+
+# --- Draft-review actions: edit / approve / reject / send (plan Task 17) ------
+
+
+async def test_approve_then_send_resolves_and_records_reply(
+    build_paused_workflow: Any,
+    rep_client: Any,
+    email_client: FakeEmailClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """Approve then send resolves the case and records the drafted reply.
+
+    The two-step SPEC §4.7 disposition: approve stages the decision without sending,
+    then an explicit send resumes the paused graph through `finalize`, which resolves
+    the case. The route persists the drafted body via email_mcp's `record_sent_reply`
+    with the rep's audit marker, and reports Resolved with the sent reply.
+    """
+    email_client.register_ticket(7, "TKT-0007", status="Drafted")
+    graph = await build_paused_workflow(ticket_id=7)
+
+    async with rep_client(graph) as ac:
+        approved = await ac.post("/rep/tickets/7/approve", headers=auth_headers)
+        # Approve stages only — the case is not resolved and nothing is sent yet.
+        assert approved.status_code == 200
+        assert approved.json()["status"] != "Resolved"
+        assert not any(call[0] == "record_sent_reply" for call in email_client.calls)
+
+        sent = await ac.post("/rep/tickets/7/send", json={"rep_id": "rep-1"}, headers=auth_headers)
+
+    assert sent.status_code == 200
+    body = sent.json()
+    assert body["status"] == "Resolved"
+    assert body["reply"] == HAPPY_DRAFT_BODY
+    assert email_client.calls[-1] == ("record_sent_reply", 7, HAPPY_DRAFT_BODY, "rep-1")
+
+
+async def test_sent_reply_is_visible_via_customer_lookup(
+    build_paused_workflow: Any,
+    rep_client: Any,
+    email_client: FakeEmailClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """After approve→send, the resolved reply is returned by reference-code lookup.
+
+    The end-to-end acceptance path (plan Task 17): once a rep sends, a customer who
+    looks the case up by its reference code sees status Resolved and the final reply
+    — the same on-disk record the rep action wrote, reached over the customer route.
+    """
+    email_client.register_ticket(7, "TKT-0007", status="Drafted")
+    graph = await build_paused_workflow(ticket_id=7)
+
+    async with rep_client(graph) as ac:
+        await ac.post("/rep/tickets/7/approve", headers=auth_headers)
+        await ac.post("/rep/tickets/7/send", json={"rep_id": "rep-1"}, headers=auth_headers)
+        lookup = await ac.get("/tickets/TKT-0007", headers=auth_headers)
+
+    assert lookup.status_code == 200
+    body = lookup.json()
+    assert body["status"] == "Resolved"
+    assert body["reply"] == HAPPY_DRAFT_BODY
+
+
+async def test_edit_then_send_uses_the_edited_reply(
+    build_paused_workflow: Any,
+    rep_client: Any,
+    email_client: FakeEmailClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """Editing before send makes the rep's text — not the AI draft — the final reply.
+
+    Edit stages the rep's text into the paused case (held there until send, never
+    written on its own); the subsequent send resumes through `finalize`, which records
+    the edited reply as the customer-facing text.
+    """
+    edited = "Please reset your password from the login screen and call us if it fails."
+    email_client.register_ticket(7, "TKT-0007", status="Drafted")
+    graph = await build_paused_workflow(ticket_id=7)
+
+    async with rep_client(graph) as ac:
+        edit = await ac.post("/rep/tickets/7/edit", json={"reply": edited}, headers=auth_headers)
+        sent = await ac.post("/rep/tickets/7/send", json={"rep_id": "rep-9"}, headers=auth_headers)
+
+    assert edit.status_code == 200
+    assert sent.status_code == 200
+    assert sent.json()["reply"] == edited
+    assert email_client.calls[-1] == ("record_sent_reply", 7, edited, "rep-9")
+
+
+async def test_reject_routes_case_back_to_needs_research(
+    build_paused_workflow: Any,
+    rep_client: Any,
+    email_client: FakeEmailClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """Rejecting sends the case back to NeedsResearch with no reply to the customer.
+
+    Reject resumes the paused graph with a rejection; `finalize` routes the case to
+    NeedsResearch and produces no `final_reply`. The route persists the status via
+    `update_status` (never `record_sent_reply`), so nothing reaches the customer.
+    """
+    email_client.register_ticket(7, "TKT-0007", status="Drafted")
+    graph = await build_paused_workflow(ticket_id=7)
+
+    async with rep_client(graph) as ac:
+        rejected = await ac.post(
+            "/rep/tickets/7/reject",
+            json={"rep_id": "rep-3", "reason": "needs a second source"},
+            headers=auth_headers,
+        )
+
+    assert rejected.status_code == 200
+    assert rejected.json()["status"] == "NeedsResearch"
+    assert email_client.calls[-1] == ("update_status", 7, "NeedsResearch", "rep-3")
+    assert not any(call[0] == "record_sent_reply" for call in email_client.calls)
+
+
+async def test_send_without_a_prior_approval_is_refused(
+    build_paused_workflow: Any,
+    rep_client: Any,
+    email_client: FakeEmailClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """Sending a case that no rep has approved or edited is refused, not resolved.
+
+    The SPEC §10 safety invariant at the route boundary: with no rep decision staged,
+    `finalize` would fail closed, so the route rejects the send with 409 and never
+    calls `record_sent_reply` — there is no path to Resolved without an explicit
+    approve/edit first.
+    """
+    email_client.register_ticket(7, "TKT-0007", status="Drafted")
+    graph = await build_paused_workflow(ticket_id=7)
+
+    async with rep_client(graph) as ac:
+        sent = await ac.post("/rep/tickets/7/send", json={"rep_id": "rep-1"}, headers=auth_headers)
+
+    assert sent.status_code == 409
+    assert not any(call[0] == "record_sent_reply" for call in email_client.calls)
+
+
+async def test_send_rejects_a_blank_rep_marker(
+    build_paused_workflow: Any,
+    rep_client: Any,
+    email_client: FakeEmailClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """A send carrying no rep audit marker is a validation error, not a silent send.
+
+    `record_sent_reply` requires a non-empty rep marker (SPEC §4.7); the route rejects
+    a blank `rep_id` with 422 before touching the graph or email_mcp.
+    """
+    email_client.register_ticket(7, "TKT-0007", status="Drafted")
+    graph = await build_paused_workflow(ticket_id=7)
+
+    async with rep_client(graph) as ac:
+        await ac.post("/rep/tickets/7/approve", headers=auth_headers)
+        sent = await ac.post("/rep/tickets/7/send", json={"rep_id": "   "}, headers=auth_headers)
+
+    assert sent.status_code == 422
+    assert not any(call[0] == "record_sent_reply" for call in email_client.calls)
+
+
+async def test_send_requires_auth(build_paused_workflow: Any, rep_client: Any) -> None:
+    """A send with no bearer token is rejected with 401 before any action runs."""
+    graph = await build_paused_workflow(ticket_id=7)
+
+    async with rep_client(graph) as ac:
+        sent = await ac.post("/rep/tickets/7/send", json={"rep_id": "rep-1"})
+
+    assert sent.status_code == 401
+
+
+async def test_reject_requires_auth(build_paused_workflow: Any, rep_client: Any) -> None:
+    """A reject with no bearer token is rejected with 401 before any action runs."""
+    graph = await build_paused_workflow(ticket_id=7)
+
+    async with rep_client(graph) as ac:
+        rejected = await ac.post("/rep/tickets/7/reject", json={"rep_id": "rep-1"})
+
+    assert rejected.status_code == 401

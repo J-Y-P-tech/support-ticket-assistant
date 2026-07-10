@@ -26,9 +26,14 @@ async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     The email/kb clients are built lazily on first request and cached on
     `app.state`; here we close their reused sessions when the app stops. Clients
-    that were never used (attribute absent) are simply skipped.
+    that were never used (attribute absent) are simply skipped. The workflow
+    runtime (Postgres checkpointer + LLM client) registers its own teardown on
+    `app.state.runtime_stack`, closed here too. All absent under test overrides.
     """
     yield
+    runtime_stack = getattr(app.state, "runtime_stack", None)
+    if runtime_stack is not None:
+        await runtime_stack.aclose()
     for attr in ("email_client", "kb_client"):
         client = getattr(app.state, attr, None)
         if client is not None:

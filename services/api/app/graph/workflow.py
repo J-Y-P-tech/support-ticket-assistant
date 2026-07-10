@@ -29,6 +29,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
+from langchain_core.runnables import RunnableConfig
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.state import CompiledStateGraph
@@ -44,6 +45,18 @@ from app.guardrails.output import screen_output
 from app.llm.base import LLM
 from app.llm.thinking import contains_thinking_trace
 from app.schemas.enums import FeedbackDecision, TicketStatus
+
+
+def thread_config(ticket_id: int) -> RunnableConfig:
+    """Build the LangGraph run config pinning one checkpoint thread to a ticket.
+
+    A ticket's whole run — the automated pipeline, the human pause, and the resume
+    the rep-action routes drive — shares one checkpoint thread keyed by the ticket id,
+    so a route resumes exactly the paused run that belongs to that case. Centralised
+    here so intake and the rep routes derive the same thread id from a ticket id, and
+    typed as a `RunnableConfig` so it flows straight into the graph's state methods.
+    """
+    return {"configurable": {"thread_id": f"ticket-{ticket_id}"}}
 
 
 class KBSearcher(Protocol):

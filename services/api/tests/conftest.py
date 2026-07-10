@@ -36,6 +36,7 @@ _TEST_ENV: dict[str, str] = {
     "GROUNDEDNESS_MIN": "0.6",
     "VALIDATE_MAX_ATTEMPTS": "2",
     "API_AUTH_TOKEN": TEST_API_TOKEN,
+    "DATABASE_URL": "postgresql://support:test@localhost:5432/support_tickets",
     "EMAIL_MCP_URL": "http://email_mcp:8000/mcp",
     "EMAIL_MCP_TOKEN": "api-to-email-token",
     "KB_MCP_URL": "http://kb_mcp:8000/mcp",
@@ -53,6 +54,10 @@ class FakeEmailClient:
     Route tests set the return values (`create_result`, `tickets_by_code`,
     `tickets_by_id`, `queue_rows`) and inspect `calls` to assert what the routes
     forwarded to email_mcp. All methods are async to match the real wrapper.
+
+    `register_ticket` stores one shared ticket dict under both its id and its
+    reference code, so a rep action that mutates it by id (send/reject) is visible
+    to a later customer lookup by code — the end-to-end approve→lookup path.
     """
 
     def __init__(self) -> None:
@@ -107,6 +112,65 @@ class FakeEmailClient:
             ordered = [r for r in ordered if (r["created_at"], r["id"]) > after]
         return ordered[:limit]
 
+    def register_ticket(
+        self,
+        ticket_id: int,
+        reference_code: str,
+        *,
+        status: str = "Drafted",
+        message: str = "",
+        reply: str | None = None,
+    ) -> dict[str, Any]:
+        """Register one shared ticket dict under both its id and reference code.
+
+        Returns the dict so a test can inspect it after a rep action mutates it in
+        place; the same object is reachable by id (rep routes) and by code
+        (customer lookup), so a send/reject write shows up on a later lookup.
+        """
+        ticket: dict[str, Any] = {
+            "id": ticket_id,
+            "reference_code": reference_code,
+            "status": status,
+            "message": message,
+            "attachments": [],
+            "reply": reply,
+        }
+        self.tickets_by_id[ticket_id] = ticket
+        self.tickets_by_code[reference_code] = ticket
+        return ticket
+
+    async def record_sent_reply(
+        self, ticket_id: int, reply: str, rep_id: str
+    ) -> dict[str, Any] | None:
+        """Record a rep-sent reply: resolve the ticket in place and return it.
+
+        Mirrors email_mcp's `record_sent_reply` — the reply is saved and the case
+        moves to Resolved. Mutates the registered ticket in place so a later lookup
+        by code sees the reply; returns None for an unknown id (neutral not-found).
+        """
+        self.calls.append(("record_sent_reply", ticket_id, reply, rep_id))
+        ticket = self.tickets_by_id.get(ticket_id)
+        if ticket is None:
+            return None
+        ticket["reply"] = reply
+        ticket["status"] = "Resolved"
+        return ticket
+
+    async def update_status(
+        self, ticket_id: int, status: str, actor: str | None = None
+    ) -> dict[str, Any] | None:
+        """Transition a ticket's status in place and return it (None if unknown).
+
+        Mirrors email_mcp's `update_status` — used by the reject action to route a
+        case back to NeedsResearch. It never sets Resolved (that is send-only).
+        """
+        self.calls.append(("update_status", ticket_id, status, actor))
+        ticket = self.tickets_by_id.get(ticket_id)
+        if ticket is None:
+            return None
+        ticket["status"] = status
+        return ticket
+
 
 @pytest.fixture
 def email_client() -> FakeEmailClient:
@@ -153,3 +217,114 @@ def client(email_client: FakeEmailClient, test_settings: Any) -> Iterator[Any]:
 def auth_headers() -> dict[str, str]:
     """Return an Authorization header carrying the accepted frontend->api token."""
     return {"Authorization": f"Bearer {TEST_API_TOKEN}"}
+
+
+# --- Rep-action (draft review) test support (plan Task 17) ------------------
+#
+# The rep-action routes resume a *paused* LangGraph run and then persist the
+# outcome via email_mcp. These fixtures drive the real workflow (against the
+# deterministic FakeLLM + a confident fake KB) to the human-review pause, so a
+# route test exercises the genuine resume→finalize path — no Ollama, no Postgres.
+
+# The happy-path model script, one response per model-using step, in graph order:
+# screen_input → triage → draft → validate → screen_output. Mirrors the workflow
+# suite so the drafted body a rep sees/sends is a known constant.
+HAPPY_DRAFT_BODY = "You can reset your password from the login screen. [KB-1]"
+_HAPPY_PATH_SCRIPT = [
+    '{"is_injection": false}',
+    '{"category": "account_access", "urgency": "normal", "sentiment": "neutral"}',
+    HAPPY_DRAFT_BODY,
+    '{"score": 1.0, "unsupported_claims": []}',
+    '{"has_violation": false}',
+]
+_BENIGN_MESSAGE = "How do I reset my online banking password?"
+
+
+class _FakeKBClient:
+    """In-memory KB stand-in returning one confident, citable source (id `KB-1`)."""
+
+    async def search(self, query: str, limit: int | None = None) -> Any:
+        """Ignore the query and return a single confident source."""
+        from app.schemas.kb import KBSearchResult, KBSource
+
+        return KBSearchResult(
+            sources=[
+                KBSource(
+                    id="KB-1",
+                    title="Password reset",
+                    text="To reset your password, use the login screen.",
+                )
+            ],
+            no_confident_source=False,
+        )
+
+
+@pytest.fixture
+def build_paused_workflow(test_settings: Any) -> Any:
+    """Return an async factory that drives a fresh workflow to the review pause.
+
+    Each call compiles the workflow with an in-memory checkpointer (the way
+    production passes the Postgres saver), runs the happy path for `ticket_id` to
+    the `human_review` interrupt, and returns the paused compiled graph — ready for
+    a rep-action route to resume via the same `thread_config(ticket_id)` thread.
+    """
+
+    async def _factory(ticket_id: int = 7, message: str = _BENIGN_MESSAGE) -> Any:
+        """Compile a workflow and run it to the pause for one ticket; return the graph."""
+        from langgraph.checkpoint.memory import MemorySaver
+
+        from app.graph.workflow import build_workflow, thread_config
+        from app.llm.fake import FakeLLM
+        from app.schemas.enums import TicketStatus
+
+        graph = build_workflow(
+            llm=FakeLLM(list(_HAPPY_PATH_SCRIPT)),
+            kb_client=_FakeKBClient(),
+            settings=test_settings,
+            checkpointer=MemorySaver(),
+        )
+        initial = {
+            "ticket_id": ticket_id,
+            "message": message,
+            "attachments": [],
+            "extracted_facts": None,
+            "flags": [],
+            "status": TicketStatus.NEW,
+        }
+        await graph.ainvoke(initial, thread_config(ticket_id))
+        return graph
+
+    return _factory
+
+
+@pytest.fixture
+def rep_client(test_settings: Any, email_client: FakeEmailClient) -> Any:
+    """Return an async-context factory: an httpx client wired to a paused workflow.
+
+    Given the compiled graph from `build_paused_workflow`, it builds the app with
+    the settings, email client, and workflow dependencies overridden, and yields an
+    `httpx.AsyncClient` bound to it. Async (not `TestClient`) because the rep-action
+    routes await the graph resume, and the same app carries the customer-lookup
+    route, so an approve→send→lookup test runs end to end on one client.
+    """
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def _make(graph: Any) -> Any:
+        """Yield an AsyncClient for an app whose workflow is the given paused graph."""
+        import httpx
+
+        from app.config import get_settings
+        from app.graph.runtime import get_workflow
+        from app.main import create_app
+        from app.mcp_clients.email import get_email_client
+
+        app = create_app()
+        app.dependency_overrides[get_settings] = lambda: test_settings
+        app.dependency_overrides[get_email_client] = lambda: email_client
+        app.dependency_overrides[get_workflow] = lambda: graph
+        transport = httpx.ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as ac:
+            yield ac
+
+    return _make

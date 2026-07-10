@@ -90,6 +90,39 @@ class EmailMCPClient(MCPClient):
         payload = await self.call_tool("fetch_new_tickets", arguments, retry_on_disconnect=True)
         return cast("list[dict[str, Any]]", payload)
 
+    async def record_sent_reply(
+        self, ticket_id: int, reply: str, rep_id: str
+    ) -> dict[str, Any] | None:
+        """Record a rep-sent reply: save it and resolve the case (SPEC §4.7).
+
+        `rep_id` is the rep-action marker email_mcp requires to resolve a case, so
+        there is no auto-resolve path. A write: `retry_on_disconnect` is left off so a
+        dropped connection surfaces rather than risking a double send. Returns the
+        resolved ticket, or None if the id is unknown (neutral not-found).
+        """
+        return _to_optional(
+            await self.call_tool(
+                "record_sent_reply",
+                {"ticket_id": ticket_id, "reply": reply, "rep_id": rep_id},
+            )
+        )
+
+    async def update_status(
+        self, ticket_id: int, status: str, actor: str | None = None
+    ) -> dict[str, Any] | None:
+        """Transition a ticket to `status` and return it (None if unknown).
+
+        Used by the reject action to route a case back to NeedsResearch. email_mcp
+        refuses to set Resolved through this tool — that is send-only (`record_sent_reply`)
+        — so it can never be a back door to resolution. A write: no reconnect+retry.
+        """
+        return _to_optional(
+            await self.call_tool(
+                "update_status",
+                {"ticket_id": ticket_id, "status": status, "actor": actor},
+            )
+        )
+
 
 def get_email_client(
     request: Request, settings: Settings = Depends(get_settings)

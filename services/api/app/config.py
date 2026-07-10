@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     groundedness_min: float  # min judge groundedness score before a draft is flagged unverified
     validate_max_attempts: int  # judge tries for a valid GroundednessVerdict before failing closed
 
+    # --- LangGraph checkpointer store (SPEC §3/§5: Postgres-backed, so a case
+    #     pending human review survives a restart and resumes days later) ---
+    database_url: str  # Postgres DSN the api's workflow checkpointer connects to
+
     # --- Inter-service auth: a separate bearer token per connection (least privilege, SPEC §6) ---
     api_auth_token: SecretStr  # presented by the frontend to this api
     email_mcp_url: str
