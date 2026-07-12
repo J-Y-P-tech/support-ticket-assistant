@@ -156,6 +156,27 @@ DRAFT REPLY:
 
 JSON:"""
 
+# OCR vision transcription — pass 1 of digitization (plan Task 19 / todo Task 20).
+# Sent with the attachment image on the multimodal path (SPEC §4.2). It takes no
+# placeholders: transcription needs only the image, and the customer's question is
+# fused in later (pass 3), never here. Appendix A records that left to its own prompt
+# the model *describes/interprets* the image, so every rule below pushes the model the
+# other way — copy the visible characters and nothing else. The node still strips any
+# leaked reasoning trace defensively, but the prompt is the first line of defence.
+_OCR = """\
+You are an OCR transcription engine for a financial institution's support desk. \
+Transcribe the visible text in the attached image verbatim.
+
+Rules:
+- Output ONLY the text that appears in the image, character for character, preserving \
+its wording, numbers, and line breaks.
+- Do NOT describe, summarise, interpret, or explain the image or its layout.
+- Do NOT add any commentary, headings, labels, or notes of your own.
+- If some text is unreadable, transcribe what you can and write [illegible] for the rest.
+- If the image contains no readable text, output nothing.
+
+Transcription:"""
+
 # The registry. New node prompts are added here (name -> template), keeping every
 # prompt in one place. Names are the seam's public contract, shared with Langfuse
 # when Task 28 lands.
@@ -165,6 +186,7 @@ _PROMPTS: dict[str, str] = {
     "validate": _VALIDATE,
     "input_guard": _INPUT_GUARD,
     "output_guard": _OUTPUT_GUARD,
+    "ocr": _OCR,
 }
 
 

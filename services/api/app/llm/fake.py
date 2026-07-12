@@ -37,7 +37,8 @@ class FakeLLM(LLM):
             self._constant = None
             self._script = list(responses)
         self._index = 0
-        # Each entry records one call's prompt and images, for test assertions.
+        # Each entry records one call's prompt, images, and think flag, for test
+        # assertions (e.g. that the OCR pass overrides reason-by-default with think=False).
         self.calls: list[dict[str, Any]] = []
 
     async def generate(
@@ -45,12 +46,13 @@ class FakeLLM(LLM):
     ) -> str:
         """Record the call and return the next scripted (or the constant) response.
 
-        `think` is accepted for interface parity with the real client but ignored:
-        the fake's output is fixed by its script, so tests stay deterministic
-        regardless of it. Raises `IndexError` in scripted mode once the script is
-        exhausted, so a test that calls the model more often than scripted fails loudly.
+        `think` is recorded (so a test can assert a node's per-node override) but does
+        not affect the output: the fake's response is fixed by its script, so tests stay
+        deterministic regardless of it. Raises `IndexError` in scripted mode once the
+        script is exhausted, so a test that calls the model more often than scripted
+        fails loudly.
         """
-        self.calls.append({"prompt": prompt, "images": images})
+        self.calls.append({"prompt": prompt, "images": images, "think": think})
         if self._constant is not None:
             return self._constant
         if self._index >= len(self._script):

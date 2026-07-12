@@ -82,9 +82,7 @@ async def start_pipeline(
         workflow = await get_workflow_for_app(app, settings)
         await workflow.ainvoke(initial, thread_config(ticket_id))
     except Exception:
-        _logger.exception(
-            "pipeline failed for ticket %s; left New for manual handling", ticket_id
-        )
+        _logger.exception("pipeline failed for ticket %s; left New for manual handling", ticket_id)
 
 
 def get_pipeline_starter() -> PipelineStarter:

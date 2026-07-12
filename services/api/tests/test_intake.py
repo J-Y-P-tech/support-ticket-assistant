@@ -80,9 +80,7 @@ async def test_start_pipeline_runs_a_submission_to_the_human_gate(test_settings:
     )
     app = _app_with_workflow(graph)
 
-    await start_pipeline(
-        app, test_settings, ticket_id=42, message=_BENIGN_MESSAGE, attachments=[]
-    )
+    await start_pipeline(app, test_settings, ticket_id=42, message=_BENIGN_MESSAGE, attachments=[])
 
     snapshot = graph.get_state(thread_config(42))
     assert snapshot.next == ("human_review",)

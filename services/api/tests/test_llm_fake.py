@@ -34,11 +34,11 @@ async def test_constant_mode_returns_same_response_every_call() -> None:
     assert await llm.generate("b") == "always"
 
 
-async def test_records_prompt_and_images_for_each_call() -> None:
-    """Every call's prompt and images are recorded for later assertions."""
+async def test_records_prompt_images_and_think_for_each_call() -> None:
+    """Every call's prompt, images, and think flag are recorded for later assertions."""
     llm = FakeLLM(["ok"])
-    await llm.generate("look at this", images=["b64image"])
-    assert llm.calls == [{"prompt": "look at this", "images": ["b64image"]}]
+    await llm.generate("look at this", images=["b64image"], think=False)
+    assert llm.calls == [{"prompt": "look at this", "images": ["b64image"], "think": False}]
 
 
 async def test_default_images_recorded_as_none() -> None:
@@ -46,6 +46,14 @@ async def test_default_images_recorded_as_none() -> None:
     llm = FakeLLM(["ok"])
     await llm.generate("text only")
     assert llm.calls[0]["images"] is None
+
+
+async def test_default_think_recorded_as_true() -> None:
+    """A call that omits `think` records the reason-by-default (True), so a node's
+    per-node override (e.g. the OCR pass's `think=False`) is distinguishable from it."""
+    llm = FakeLLM(["ok"])
+    await llm.generate("reason by default")
+    assert llm.calls[0]["think"] is True
 
 
 async def test_exhausting_the_script_raises() -> None:
