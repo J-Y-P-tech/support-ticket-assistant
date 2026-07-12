@@ -177,6 +177,38 @@ its wording, numbers, and line breaks.
 
 Transcription:"""
 
+# Structured extraction — pass 2 of digitization (plan Task 20 / todo Task 21).
+# `{transcription}` is the verbatim text the OCR pass produced; the model turns it into
+# the structured fields of `ExtractionResult`. `raw_text` is deliberately NOT requested:
+# the node keeps the true transcription itself so the verbatim text can never be lost to
+# a model that garbles or omits it. These facts are unverified, rep-facing input (SPEC
+# §4.2) — never authoritative grounding — so the prompt asks the model to extract only
+# what is present and to flag its own uncertainty rather than guess.
+_EXTRACT = """\
+You are a document-extraction assistant for a financial institution's support desk. \
+Below is the verbatim transcription of a customer's attachment. Extract the key facts \
+into a structured record for a support representative to review.
+
+Respond with a single JSON object and nothing else, using exactly these keys:
+- "doc_type": a short label for what the document is (for example "cheque", "bank \
+statement", "receipt", "letter"), or null if it is unclear.
+- "amounts": a list of monetary amounts that appear, as written (for example \
+["$1,250.00"]); an empty list if none.
+- "dates": a list of dates that appear, as written; an empty list if none.
+- "names": a list of people or organisation names that appear; an empty list if none.
+- "references": a list of reference, account, or document numbers that appear; an empty \
+list if none.
+- "low_confidence": true if the transcription is too garbled, sparse, or ambiguous to \
+extract reliably, otherwise false.
+
+Extract only what is actually present in the transcription. Do not invent, infer, or \
+complete missing values. When a fact is unclear, leave it out rather than guessing.
+
+Transcription:
+{transcription}
+
+JSON:"""
+
 # The registry. New node prompts are added here (name -> template), keeping every
 # prompt in one place. Names are the seam's public contract, shared with Langfuse
 # when Task 28 lands.
@@ -187,6 +219,7 @@ _PROMPTS: dict[str, str] = {
     "input_guard": _INPUT_GUARD,
     "output_guard": _OUTPUT_GUARD,
     "ocr": _OCR,
+    "extract": _EXTRACT,
 }
 
 

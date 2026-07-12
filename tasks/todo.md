@@ -43,8 +43,8 @@ Order is dependency-correct; do not start a task before its dependencies are che
   - wiring the checkpoint needs (nothing started the graph — submit only stored — and kb_mcp was absent from the stack): submit-time pipeline trigger (background task) + kb_mcp compose wiring.
 
 ## Phase 7 — Document digitization
-- [ ] **20.** OCR vision-transcription pass (strip thinking) — *deps: 10*
-- [ ] **21.** structured extraction pass (retry-once, flag on fail) — *deps: 2,20*
+- [x] **20.** OCR vision-transcription pass (strip thinking) — *deps: 10*
+- [x] **21.** structured extraction pass (retry-once, flag on fail) — *deps: 2,20*
 - [ ] **22.** fused search-query pass + wire ocr_extract node — *deps: 17,21*
 
 ## Phase 8 — Security & encryption
