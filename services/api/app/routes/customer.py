@@ -11,8 +11,10 @@ ever reaches them through the token-holding frontend.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 
+from app.config import Settings, get_settings
+from app.graph.intake import PipelineStarter, get_pipeline_starter
 from app.mcp_clients.email import EmailMCPClient, get_email_client
 from app.schemas.ticket import TicketCreate, TicketRead
 from app.security import require_auth
@@ -33,10 +35,28 @@ def _normalize_code(code: str) -> str:
 @router.post("/tickets", status_code=status.HTTP_201_CREATED, response_model=TicketRead)
 async def submit_ticket(
     payload: TicketCreate,
+    request: Request,
+    background_tasks: BackgroundTasks,
     email: EmailMCPClient = Depends(get_email_client),
+    settings: Settings = Depends(get_settings),
+    start_pipeline: PipelineStarter = Depends(get_pipeline_starter),
 ) -> TicketRead:
-    """Create a New ticket and return its reference code and status (SPEC §4.1)."""
+    """Create a New ticket, kick off the AI pipeline, and return its code (SPEC §4.1).
+
+    The reply is returned as soon as the ticket is stored; the AI pipeline (triage →
+    retrieve → draft, pausing at the human gate) runs afterwards as a background task,
+    so the customer's submit stays instant. The pipeline persists a paused run the rep
+    later reviews — see `app.graph.intake`.
+    """
     created = await email.create_ticket(payload.message, payload.attachments)
+    background_tasks.add_task(
+        start_pipeline,
+        request.app,
+        settings,
+        ticket_id=created["id"],
+        message=created["message"],
+        attachments=created.get("attachments") or [],
+    )
     # model_validate reads the fields from `created` and validates them against TicketRead.
     return TicketRead.model_validate(created)
 

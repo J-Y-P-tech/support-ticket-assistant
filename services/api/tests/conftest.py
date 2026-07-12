@@ -203,12 +203,19 @@ def client(email_client: FakeEmailClient, test_settings: Any) -> Iterator[Any]:
     from fastapi.testclient import TestClient
 
     from app.config import get_settings
+    from app.graph.intake import get_pipeline_starter
     from app.main import create_app
     from app.mcp_clients.email import get_email_client
+
+    async def _noop_pipeline_starter(*args: Any, **kwargs: Any) -> None:
+        """Stand in for the submit-time trigger so no Postgres/Ollama is touched."""
 
     app = create_app()
     app.dependency_overrides[get_settings] = lambda: test_settings
     app.dependency_overrides[get_email_client] = lambda: email_client
+    # Submitting schedules the AI pipeline as a background task; the customer-route
+    # tests assert the route's own behaviour, so swap the trigger for a no-op.
+    app.dependency_overrides[get_pipeline_starter] = lambda: _noop_pipeline_starter
     with TestClient(app) as test_client:
         yield test_client
 

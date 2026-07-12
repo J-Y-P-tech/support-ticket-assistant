@@ -20,7 +20,7 @@ from __future__ import annotations
 from contextlib import AsyncExitStack
 from typing import cast
 
-from fastapi import Depends, Request
+from fastapi import Depends, FastAPI, Request
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph.state import CompiledStateGraph
 
@@ -35,25 +35,36 @@ async def get_workflow(
 ) -> CompiledStateGraph:
     """FastAPI dependency: return the process-wide compiled workflow.
 
-    Built once on first use (Postgres checkpointer + Ollama LLM + KB client) and cached
-    on `app.state`. Overridden in tests with a graph compiled against an in-memory
-    checkpointer, so route tests never open a database or reach Ollama.
+    A thin dependency wrapper over `get_workflow_for_app`, so the rep-action routes
+    resolve the same cached graph the submit-time pipeline trigger uses. Overridden in
+    tests with a graph compiled against an in-memory checkpointer, so route tests never
+    open a database or reach Ollama.
     """
-    workflow = getattr(request.app.state, "workflow", None)
+    return await get_workflow_for_app(request.app, settings)
+
+
+async def get_workflow_for_app(app: FastAPI, settings: Settings) -> CompiledStateGraph:
+    """Return the process-wide compiled workflow, building it on first use.
+
+    Built once (Postgres checkpointer + Ollama LLM + KB client) and cached on
+    `app.state`. Shared by the rep-action routes (via `get_workflow`) and the
+    submit-time background trigger (`app.graph.intake`), so a ticket's automated run
+    and the rep's later resume drive the *same* graph and checkpointer.
+    """
+    workflow = getattr(app.state, "workflow", None)
     if workflow is None:
-        workflow = await _build_app_workflow(request, settings)
-        request.app.state.workflow = workflow
+        workflow = await _build_app_workflow(app, settings)
+        app.state.workflow = workflow
     return cast("CompiledStateGraph", workflow)
 
 
-async def _build_app_workflow(request: Request, settings: Settings) -> CompiledStateGraph:
+async def _build_app_workflow(app: FastAPI, settings: Settings) -> CompiledStateGraph:
     """Compile the production workflow with the Postgres checkpointer and host LLM.
 
     The Postgres saver and the LLM's HTTP client are registered on an `AsyncExitStack`
     cached on `app.state.runtime_stack`, so the app lifespan tears both down cleanly on
     shutdown. `checkpointer.setup()` creates LangGraph's tables on first run if absent.
     """
-    app = request.app
     stack = getattr(app.state, "runtime_stack", None)
     if stack is None:
         stack = AsyncExitStack()
@@ -67,25 +78,25 @@ async def _build_app_workflow(request: Request, settings: Settings) -> CompiledS
     llm = OllamaLLM(model=settings.llm_model, base_url=settings.ollama_base_url)
     stack.push_async_callback(llm.aclose)
 
-    kb_client = _shared_kb_client(request, settings)
+    kb_client = _shared_kb_client(app, settings)
     return build_workflow(
         llm=llm, kb_client=kb_client, settings=settings, checkpointer=checkpointer
     )
 
 
-def _shared_kb_client(request: Request, settings: Settings) -> KBMCPClient:
+def _shared_kb_client(app: FastAPI, settings: Settings) -> KBMCPClient:
     """Return the app's shared `KBMCPClient`, building and caching it if absent.
 
     Reuses (or seeds) the same `app.state.kb_client` the `get_kb_client` dependency
     caches and the lifespan closes, so retrieval during a run and any direct KB route
     share one session.
     """
-    client = getattr(request.app.state, "kb_client", None)
+    client = getattr(app.state, "kb_client", None)
     if client is None:
         client = KBMCPClient(
             url=settings.kb_mcp_url,
             token=settings.kb_mcp_token.get_secret_value(),
             default_limit=settings.kb_search_limit,
         )
-        request.app.state.kb_client = client
+        app.state.kb_client = client
     return cast("KBMCPClient", client)

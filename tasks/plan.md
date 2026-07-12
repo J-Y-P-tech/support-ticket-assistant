@@ -295,6 +295,20 @@ case shows Resolved; unverified banner renders when flagged. **Verification:** A
 
 > **Checkpoint C — Text pipeline end-to-end:** submit → triage → retrieve → draft → **rep approves**
 > → resolved → customer lookup, all on FakeLLM, human gate enforced. Review before Phase 7.
+>
+> **Wiring the checkpoint needs.** Nothing started the workflow — `submit_ticket` only stored the
+> ticket, and the rep-action routes only *resume* an already-paused run, so no ticket ever reached
+> `human_review`; kb_mcp was also missing from `docker-compose.yml`, so the retrieve step had no
+> connector. Kick off the graph as a **FastAPI background task** on submit (`app/graph/intake.py`):
+> the customer's submit returns the reference code immediately while `screen_input → triage →
+> retrieve → draft → validate → screen_output` run behind it and the graph pauses at the human gate,
+> persisted for the rep to review (SPEC §4.7). Failures fail safe: the exception is logged and the
+> ticket stays New. Add the `kb_mcp` service to compose and make `api` depend on it.
+> **Checks:** submitting produces a run paused at `human_review` under `thread-<id>` (nothing sent);
+> the rep review route returns its draft; a pipeline failure leaves the ticket New, never a 500 on
+> submit; `docker compose config` shows five services including kb_mcp.
+> **Files:** `services/api/app/graph/{intake.py,runtime.py}`, `services/api/app/routes/customer.py`,
+> `docker-compose.yml`, `tests/`.
 
 ### Phase 7 — Document digitization (attachments)
 

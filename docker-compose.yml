@@ -1,8 +1,9 @@
-# Docker Compose — walking-skeleton stack (plan Task 7).
-# postgres + the three app services (email_mcp, api, frontend) needed for the
-# no-AI path: submit -> store -> rep queue -> lookup. kb_mcp and langfuse are
-# wired in later tasks. Ollama is NOT containerized; services reach it on the host
-# via host.docker.internal (Linux needs the host-gateway mapping added per service).
+# Docker Compose — text-pipeline stack (plan Task 7; kb_mcp added for Checkpoint C).
+# postgres + four app services (email_mcp, kb_mcp, api, frontend). email_mcp/api/
+# frontend carry the no-AI path (submit -> store -> rep queue -> lookup); kb_mcp is
+# the Knowledge-Base connector the AI pipeline's retrieve step calls (SPEC §4.4).
+# langfuse is wired in a later task. Ollama is NOT containerized; services reach it on
+# the host via host.docker.internal (Linux needs the host-gateway mapping per service).
 #
 # All app services build from the repo root (context: .) because their Dockerfiles
 # COPY `pyproject.toml`/`uv.lock` and their `services/<name>` tree from there. They
@@ -49,6 +50,17 @@ services:
     ports:
       - "${EMAIL_MCP_PORT:-8000}:8000"
 
+  kb_mcp:
+    build:
+      context: .
+      dockerfile: services/kb_mcp/Dockerfile
+    restart: unless-stopped
+    # The Knowledge-Base connector (SPEC §4.4): no DB, no secrets to protect — the
+    # curated mock_kb answers ship in the image. Reads KB_SEARCH_LIMIT from .env so it
+    # matches the api's value. Not published on the host; the api reaches it in-cluster
+    # at http://kb_mcp:8000/mcp (KB_MCP_URL in .env).
+    env_file: .env
+
   api:
     build:
       context: .
@@ -63,6 +75,8 @@ services:
       - "host.docker.internal:host-gateway"
     depends_on:
       email_mcp:
+        condition: service_started
+      kb_mcp:
         condition: service_started
     ports:
       - "${API_PORT:-8001}:8000"
