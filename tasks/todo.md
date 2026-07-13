@@ -45,10 +45,10 @@ Order is dependency-correct; do not start a task before its dependencies are che
 ## Phase 7 — Document digitization
 - [x] **20.** OCR vision-transcription pass (strip thinking) — *deps: 10*
 - [x] **21.** structured extraction pass (retry-once, flag on fail) — *deps: 2,20*
-- [ ] **22.** fused search-query pass + wire ocr_extract node — *deps: 17,21*
+- [x] **22.** fused search-query pass + wire ocr_extract node — *deps: 17,21*
 
 ## Phase 8 — Security & encryption
-- [ ] **23.** PII encryption at rest (AES-GCM/Fernet) — *deps: 3,21*
+- [x] **23.** PII encryption at rest (AES-GCM/Fernet) — *deps: 3,21*
 - [ ] **24.** structlog + PII redaction + input hardening + auth enforcement — *deps: 4,23*
 - [ ] **25.** compliance audit trail — *deps: 3,18*
 

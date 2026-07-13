@@ -23,6 +23,8 @@ dependencies = [
     # checkpointer, so a case pending human review survives a restart (SPEC §5).
     "langgraph>=0.2,<1",
     "langgraph-checkpoint-postgres>=2,<3",
+    # api (Task 23): authenticated encryption (Fernet) for PII at rest (SPEC §6).
+    "cryptography>=43,<47",
 ]
 
 [dependency-groups]
