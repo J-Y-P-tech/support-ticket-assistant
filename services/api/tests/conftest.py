@@ -35,6 +35,7 @@ _TEST_ENV: dict[str, str] = {
     "TRIAGE_MAX_ATTEMPTS": "2",
     "GROUNDEDNESS_MIN": "0.6",
     "VALIDATE_MAX_ATTEMPTS": "2",
+    "EXTRACT_MAX_ATTEMPTS": "2",
     "API_AUTH_TOKEN": TEST_API_TOKEN,
     "DATABASE_URL": "postgresql://support:test@localhost:5432/support_tickets",
     "EMAIL_MCP_URL": "http://email_mcp:8000/mcp",
@@ -234,11 +235,13 @@ def auth_headers() -> dict[str, str]:
 # route test exercises the genuine resume→finalize path — no Ollama, no Postgres.
 
 # The happy-path model script, one response per model-using step, in graph order:
-# screen_input → triage → draft → validate → screen_output. Mirrors the workflow
-# suite so the drafted body a rep sees/sends is a known constant.
+# screen_input → ocr_extract (search-intent fusion) → triage → draft → validate →
+# screen_output. Mirrors the workflow suite so the drafted body a rep sees/sends is a
+# known constant; the text-only ticket fuses its query from the message alone.
 HAPPY_DRAFT_BODY = "You can reset your password from the login screen. [KB-1]"
 _HAPPY_PATH_SCRIPT = [
     '{"is_injection": false}',
+    "reset online banking password",
     '{"category": "account_access", "urgency": "normal", "sentiment": "neutral"}',
     HAPPY_DRAFT_BODY,
     '{"score": 1.0, "unsupported_claims": []}',

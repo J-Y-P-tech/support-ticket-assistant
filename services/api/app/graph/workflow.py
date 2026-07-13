@@ -1,9 +1,11 @@
 """LangGraph workflow assembly + human interrupt + checkpointer (plan Task 16 / todo Task 17).
 
-This is where the plain node functions (triage, retrieve/gate, draft, validate) and
-the two guards — each written independent of LangGraph — are wired into the actual
-`StateGraph` the SPEC §5 pipeline describes, compiled with a checkpointer and a
-**human interrupt before `human_review`**.
+This is where the plain node functions (digitization's transcribe/extract/fuse, triage,
+retrieve/gate, draft, validate) and the two guards — each written independent of
+LangGraph — are wired into the actual `StateGraph` the SPEC §5 pipeline describes,
+compiled with a checkpointer and a **human interrupt before `human_review`**. The
+`ocr_extract` node runs the three digitization passes and fuses the KB search query on
+every ticket (§4.2), sitting between the input guard and triage.
 
 `build_workflow` closes over the run-time dependencies (the LLM backend, the KB
 client, and config) and returns a compiled graph. The caller injects the
@@ -36,6 +38,9 @@ from langgraph.graph.state import CompiledStateGraph
 
 from app.config import Settings
 from app.graph.nodes.draft import draft as draft_reply
+from app.graph.nodes.extract import extract
+from app.graph.nodes.fuse import fuse_query, render_extracted_facts
+from app.graph.nodes.ocr import transcribe
 from app.graph.nodes.retrieve import groundedness_gate, retrieve
 from app.graph.nodes.triage import TriageValidationError, triage
 from app.graph.nodes.validate import validate
@@ -100,8 +105,8 @@ def build_workflow(
         return {"injection_screen": result}
 
     def route_after_input(state: WorkflowState) -> str:
-        """Route a flagged injection to the block node, otherwise on to triage."""
-        return "block_injection" if state["injection_screen"].flagged else "triage"
+        """Route a flagged injection to the block node, otherwise on to digitization."""
+        return "block_injection" if state["injection_screen"].flagged else "ocr_extract"
 
     async def block_injection_node(state: WorkflowState) -> dict[str, Any]:
         """Hand a blocked injection to a human, flagged, with nothing sent onward."""
@@ -111,6 +116,30 @@ def build_workflow(
             "status": TicketStatus.NEEDS_RESEARCH,
             "flags": [f"prompt injection blocked ({found}); routed to a human rep"],
         }
+
+    async def ocr_extract_node(state: WorkflowState) -> dict[str, Any]:
+        """Digitize any attachments and fuse the KB search query (SPEC §4.2 passes 1-3).
+
+        Runs the three digitization passes. For a ticket with attachments each image is
+        transcribed verbatim and the transcriptions are joined into one combined text,
+        which is structured into an `ExtractionResult` and rendered to the rep-facing
+        `extracted_facts` digest. Every ticket then fuses a concise KB `search_query`
+        from the message plus that digest (a text-only ticket fuses from the message
+        alone). Attachments that transcribe to nothing readable are treated as text-only,
+        so an image with no text neither invents facts nor blocks the fuse.
+        """
+        attachments = state.get("attachments") or []
+        summary: str | None = None
+        update: dict[str, Any] = {}
+        if attachments:
+            transcriptions = [await transcribe(image, llm) for image in attachments]
+            combined = "\n\n---\n\n".join(t for t in transcriptions if t.strip())
+            if combined.strip():
+                result = await extract(combined, llm, max_attempts=settings.extract_max_attempts)
+                summary = render_extracted_facts(result)
+                update["extracted_facts"] = summary
+        update["search_query"] = await fuse_query(state["message"], llm, attachment_summary=summary)
+        return update
 
     async def triage_node(state: WorkflowState) -> dict[str, Any]:
         """Classify the ticket, or hand it to a human if it cannot be classified.
@@ -138,7 +167,12 @@ def build_workflow(
         return "retrieve" if state.get("triage") is not None else "human_review"
 
     async def retrieve_node(state: WorkflowState) -> dict[str, Any]:
-        """Search the KB with the fused query (the message, for text-only tickets)."""
+        """Search the KB with the fused query the `ocr_extract` node produced (SPEC §4.2).
+
+        `search_query` is set for every ticket by `ocr_extract` (the fused message +
+        attachment summary); the fall back to the raw message is a defensive belt-and-
+        braces in case the field is ever absent, never the normal path.
+        """
         query = state.get("search_query") or state["message"]
         result = await retrieve(query, kb_client)  # type: ignore[arg-type]
         return {"kb_result": result, "status": TicketStatus.RESEARCHING}
@@ -240,6 +274,7 @@ def build_workflow(
     graph = StateGraph(WorkflowState)
     graph.add_node("screen_input", screen_input_node)
     graph.add_node("block_injection", block_injection_node)
+    graph.add_node("ocr_extract", ocr_extract_node)
     graph.add_node("triage", triage_node)
     graph.add_node("retrieve", retrieve_node)
     graph.add_node("flag_needs_research", flag_needs_research_node)
@@ -253,9 +288,10 @@ def build_workflow(
     graph.add_conditional_edges(
         "screen_input",
         route_after_input,
-        {"block_injection": "block_injection", "triage": "triage"},
+        {"block_injection": "block_injection", "ocr_extract": "ocr_extract"},
     )
     graph.add_edge("block_injection", "human_review")
+    graph.add_edge("ocr_extract", "triage")
     graph.add_conditional_edges(
         "triage",
         route_after_triage,

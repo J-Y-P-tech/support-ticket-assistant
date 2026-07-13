@@ -209,6 +209,33 @@ Transcription:
 
 JSON:"""
 
+# Search-intent fusion — pass 3 of digitization (plan Task 21 / todo Task 22).
+# `{message}` is the customer's question; `{attachment}` is an optional block carrying
+# the extracted-facts digest of any attached document (empty for a text-only ticket, so
+# the prompt never shows a dangling header). The attachment is *part of the message*, not
+# a separate thing (SPEC §4.2), so the model folds both into one concise query that the
+# agent hands to the KB connector for retrieval (§4.4) — the fused query, never the raw
+# transcription, is what searches the KB. The instruction to output query terms only
+# keeps the result usable as a search string; the node still trace-strips it defensively
+# and falls back to the message so the query is never empty.
+_FUSE = """\
+You are a search-query assistant for a financial institution's support desk. From the \
+customer's message — and any attached-document summary — produce ONE concise search query \
+to look up the most relevant knowledge-base articles.
+
+Rules:
+- Output ONLY the query text: a short line of the key search terms. No explanation, no \
+quotes, no labels, no punctuation-heavy formatting.
+- Capture what the customer actually needs help with.
+- When an attached-document summary is provided, fold its key facts (document type, \
+reference or account numbers, amounts) into the query — the attachment is part of the \
+customer's request, not a separate thing.
+
+Customer message:
+{message}
+{attachment}
+Search query:"""
+
 # The registry. New node prompts are added here (name -> template), keeping every
 # prompt in one place. Names are the seam's public contract, shared with Langfuse
 # when Task 28 lands.
@@ -220,6 +247,7 @@ _PROMPTS: dict[str, str] = {
     "output_guard": _OUTPUT_GUARD,
     "ocr": _OCR,
     "extract": _EXTRACT,
+    "fuse": _FUSE,
 }
 
 

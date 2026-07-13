@@ -39,9 +39,10 @@ class WorkflowState(TypedDict, total=False):
 
     Grouped by lifecycle stage:
 
-    - **Intake** — `ticket_id`, `message`, `attachments`, and `extracted_facts` (the
-      OCR digest, `None` for text-only tickets until Phase 7) are set at invocation;
-      `search_query` is the fused KB query (the message alone for now).
+    - **Intake** — `ticket_id`, `message`, and `attachments` are set at invocation;
+      `extracted_facts` (the OCR digest, `None` for text-only tickets) and `search_query`
+      (the fused KB query — message + attachment summary) are produced by the
+      `ocr_extract` node before triage and retrieval.
     - **Pipeline products** — `injection_screen`, `triage`, `kb_result`, `draft`,
       `validation`, and `output_screen` are each written by the node that owns them,
       so downstream nodes and the rep see validated artefacts, never raw model output.

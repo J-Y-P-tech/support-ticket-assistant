@@ -3,8 +3,8 @@
 The first of the three digitization passes (SPEC §4.2). It sends the attachment image
 to the single multimodal model under a strict "transcribe the visible text verbatim,
 output text only" prompt and returns the raw transcription. The later passes turn that
-text into a validated `ExtractionResult` (todo Task 21) and a fused search query (todo
-Task 22); this pass is only the read.
+text into a validated `ExtractionResult` (`extract`) and a fused search query (`fuse`);
+this pass is only the read.
 
 Two guarantees shape it, both from SPEC §4.2 / Appendix A:
 
@@ -17,9 +17,10 @@ Two guarantees shape it, both from SPEC §4.2 / Appendix A:
   net for a model that reasons anyway and leaks the trace into its answer, `strip_thinking`
   is applied defensively — the one place this fallback is used on purpose (todo Task 10).
 
-This is a plain async function, independent of LangGraph; the state adapter that wraps
-it into a graph node is added with the later digitization tasks. The prompt lives in-repo
-via the prompt registry for now; Langfuse-managed resolution is deferred to Task 28.
+This is a plain async function, independent of LangGraph; the `ocr_extract` node (in the
+workflow assembly) drives it as the first of the three digitization passes. The prompt
+lives in-repo via the prompt registry for now; Langfuse-managed resolution is deferred to
+Task 28.
 """
 
 from __future__ import annotations

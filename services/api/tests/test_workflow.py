@@ -19,15 +19,19 @@ invariants:
 - a blocked prompt-injection, a triage failure, and a leaked reasoning trace each
   route to / flag the human gate rather than flowing on unchecked.
 
-The `FakeLLM` is scripted in call order. A full happy-path run makes exactly five
-model calls, one per model-using step, in graph-execution order:
-`screen_input` (injection second-opinion) → `triage` → `draft` → `validate`
-(groundedness judge) → `screen_output` (tone second-opinion). Each response below is
-the valid, structured output that step expects.
+The `FakeLLM` is scripted in call order. A full happy-path run for a text-only ticket
+makes exactly six model calls, one per model-using step, in graph-execution order:
+`screen_input` (injection second-opinion) → `ocr_extract` (search-intent fusion) →
+`triage` → `draft` → `validate` (groundedness judge) → `screen_output` (tone
+second-opinion). The `ocr_extract` node runs on every ticket: with no attachment it
+skips transcription/extraction and only fuses the search query from the message
+(project decision — see todo Task 22). Each response below is the valid, structured
+output that step expects.
 """
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 import pytest
@@ -41,6 +45,9 @@ from app.schemas.kb import KBSearchResult, KBSource
 
 # screen_input Layer-2 injection classifier: benign text is not an injection.
 _INJECTION_CLEAN = '{"is_injection": false}'
+# ocr_extract search-intent fusion: the concise fused query (message-only here — the
+# text-only ticket skips transcription/extraction and fuses from the message alone).
+_FUSED_QUERY = "reset online banking password"
 # triage: a valid TriageResult over the closed enum sets.
 _TRIAGE_OK = '{"category": "account_access", "urgency": "normal", "sentiment": "neutral"}'
 # draft: a grounded, cited reply — clean of PII/promises and any reasoning trace.
@@ -50,8 +57,26 @@ _GROUNDED_OK = '{"score": 1.0, "unsupported_claims": []}'
 # screen_output Layer-2 tone classifier: no tone violation.
 _TONE_CLEAN = '{"has_violation": false}'
 
-# The five happy-path responses in graph-execution order.
-_HAPPY_PATH_SCRIPT = [_INJECTION_CLEAN, _TRIAGE_OK, _DRAFT_BODY, _GROUNDED_OK, _TONE_CLEAN]
+# The six happy-path responses in graph-execution order (text-only ticket).
+_HAPPY_PATH_SCRIPT = [
+    _INJECTION_CLEAN,
+    _FUSED_QUERY,
+    _TRIAGE_OK,
+    _DRAFT_BODY,
+    _GROUNDED_OK,
+    _TONE_CLEAN,
+]
+
+# --- Attachment-ticket digitization script (transcribe → extract → fuse) ---
+# A base64 image stand-in and the three extra ocr_extract responses a ticket *with*
+# an attachment adds ahead of triage: the verbatim transcription, the structured
+# extraction JSON, and the fused query that folds the document facts into the search.
+_IMAGE = "aGVsbG8="
+_TRANSCRIPTION = "PAY TO THE ORDER OF John Doe $1,250.00 Ref CHK-4471"
+_EXTRACT_OK = json.dumps(
+    {"doc_type": "cheque", "amounts": ["$1,250.00"], "references": ["CHK-4471"]}
+)
+_ATTACH_FUSED = "dispute duplicate cheque CHK-4471"
 
 # A benign customer message that trips none of the input-guard signatures.
 _BENIGN_MESSAGE = "How do I reset my online banking password?"
@@ -98,12 +123,14 @@ def _no_source_kb() -> FakeKBClient:
     return FakeKBClient(KBSearchResult(sources=[], no_confident_source=True))
 
 
-def _initial_state(message: str = _BENIGN_MESSAGE) -> dict[str, Any]:
-    """Build the workflow's initial input state for a new text-only ticket."""
+def _initial_state(
+    message: str = _BENIGN_MESSAGE, attachments: list[str] | None = None
+) -> dict[str, Any]:
+    """Build the workflow's initial input state for a new ticket (text-only by default)."""
     return {
         "ticket_id": 1,
         "message": message,
-        "attachments": [],
+        "attachments": attachments or [],
         "extracted_facts": None,
         "flags": [],
         "status": TicketStatus.NEW,
@@ -153,8 +180,8 @@ async def test_workflow_pauses_before_human_review(test_settings: Any) -> None:
     assert values.get("final_reply") is None
     assert values["draft"].body == _DRAFT_BODY
     assert values["draft"].verified is True
-    # Exactly the five model-using steps ran, in order — no extra or skipped calls.
-    assert len(llm.calls) == 5
+    # Exactly the six model-using steps ran, in order — no extra or skipped calls.
+    assert len(llm.calls) == 6
 
 
 async def test_safety_invariant_no_resolve_before_pause(test_settings: Any) -> None:
@@ -262,7 +289,7 @@ async def test_no_confident_source_routes_to_human_without_drafting(test_setting
     produced, the case is flagged NeedsResearch, and the draft/validate/tone model
     calls never run (only the input-guard second opinion did).
     """
-    llm = FakeLLM([_INJECTION_CLEAN, _TRIAGE_OK])
+    llm = FakeLLM([_INJECTION_CLEAN, _FUSED_QUERY, _TRIAGE_OK])
     graph = _build(llm, _no_source_kb(), test_settings)
     config = _thread()
 
@@ -274,8 +301,8 @@ async def test_no_confident_source_routes_to_human_without_drafting(test_setting
     assert values.get("draft") is None
     assert values["status"] == TicketStatus.NEEDS_RESEARCH
     assert any("source" in flag.lower() for flag in values["flags"])
-    # Only screen_input + triage called the model; drafting was never attempted.
-    assert len(llm.calls) == 2
+    # Only screen_input + ocr_extract fusion + triage called the model; no drafting.
+    assert len(llm.calls) == 3
 
 
 async def test_prompt_injection_blocks_before_any_model_call(test_settings: Any) -> None:
@@ -310,7 +337,8 @@ async def test_triage_failure_routes_to_human(test_settings: Any) -> None:
     inventing a category or drafting on a bad triage. No draft is written.
     """
     # `triage_max_attempts` is 2 in the test settings: two invalid replies exhaust it.
-    llm = FakeLLM([_INJECTION_CLEAN, "not json", "still not json"])
+    # The fused-query response sits between the injection screen and triage.
+    llm = FakeLLM([_INJECTION_CLEAN, _FUSED_QUERY, "not json", "still not json"])
     graph = _build(llm, _confident_kb(), test_settings)
     config = _thread()
 
@@ -333,7 +361,7 @@ async def test_draft_trace_leak_is_flagged_not_stripped(test_settings: Any) -> N
     flag raised, so the rep — not the pipeline — decides what to do.
     """
     leaked = "<think>the user wants a reset</think>Reset it from the login screen. [KB-1]"
-    llm = FakeLLM([_INJECTION_CLEAN, _TRIAGE_OK, leaked, _GROUNDED_OK, _TONE_CLEAN])
+    llm = FakeLLM([_INJECTION_CLEAN, _FUSED_QUERY, _TRIAGE_OK, leaked, _GROUNDED_OK, _TONE_CLEAN])
     graph = _build(llm, _confident_kb(), test_settings)
     config = _thread()
 
@@ -345,3 +373,59 @@ async def test_draft_trace_leak_is_flagged_not_stripped(test_settings: Any) -> N
     assert values["trace_leak"] is True
     assert values["draft"].body == leaked  # preserved, not stripped
     assert any("trace" in flag.lower() for flag in values["flags"])
+
+
+async def test_retrieve_uses_the_fused_query_not_the_raw_message(test_settings: Any) -> None:
+    """The KB is searched with the fused query the ocr_extract node produced.
+
+    Proves the node is wired ahead of retrieval and that retrieval consumes its
+    `search_query`, not the raw message: a text-only ticket still runs the fusion pass,
+    and the query the fake KB receives is the fused string — distinct from the message.
+    """
+    llm = FakeLLM(_HAPPY_PATH_SCRIPT)
+    kb = _confident_kb()
+    graph = _build(llm, kb, test_settings)
+    config = _thread()
+
+    await graph.ainvoke(_initial_state(), config)
+
+    values = graph.get_state(config).values
+    assert values["search_query"] == _FUSED_QUERY
+    assert kb.queries == [_FUSED_QUERY]
+    # A text-only ticket transcribes/extracts nothing, so no facts digest is produced.
+    assert values.get("extracted_facts") is None
+
+
+async def test_attachment_ticket_digitizes_extracts_and_fuses(test_settings: Any) -> None:
+    """A ticket with an attachment transcribes, extracts, and fuses the document into search.
+
+    The full digitization path (SPEC §4.2): the attachment is transcribed, structured
+    into facts, and folded into the fused query. The rep-facing `extracted_facts` digest
+    carries the document facts and its raw text, and the KB is searched with the fused
+    query that combined the message with the attachment summary — not the raw message.
+    """
+    script = [
+        _INJECTION_CLEAN,
+        _TRANSCRIPTION,  # ocr_extract: transcribe the attachment
+        _EXTRACT_OK,  # ocr_extract: structure the transcription
+        _ATTACH_FUSED,  # ocr_extract: fuse question + attachment summary
+        _TRIAGE_OK,
+        _DRAFT_BODY,
+        _GROUNDED_OK,
+        _TONE_CLEAN,
+    ]
+    llm = FakeLLM(script)
+    kb = _confident_kb()
+    graph = _build(llm, kb, test_settings)
+    config = _thread()
+
+    await graph.ainvoke(_initial_state(attachments=[_IMAGE]), config)
+
+    values = graph.get_state(config).values
+    assert values["search_query"] == _ATTACH_FUSED
+    assert kb.queries == [_ATTACH_FUSED]
+    facts = values["extracted_facts"]
+    assert facts is not None
+    assert "cheque" in facts
+    assert "CHK-4471" in facts
+    assert _TRANSCRIPTION in facts

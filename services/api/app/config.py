@@ -46,6 +46,7 @@ class Settings(BaseSettings):
     triage_max_attempts: int  # model tries for a valid TriageResult before human hand-off
     groundedness_min: float  # min judge groundedness score before a draft is flagged unverified
     validate_max_attempts: int  # judge tries for a valid GroundednessVerdict before failing closed
+    extract_max_attempts: int  # model tries for a valid ExtractionResult before flagging low-conf
 
     # --- LangGraph checkpointer store (SPEC §3/§5: Postgres-backed, so a case
     #     pending human review survives a restart and resumes days later) ---

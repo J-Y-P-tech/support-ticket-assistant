@@ -20,10 +20,10 @@ guarantees shape it — the second is where it deliberately diverges from triage
 model's JSON, so the verbatim text survives intact whatever the model returns — the one
 field that can never be lost. Any `raw_text` the model echoes is overridden.
 
-This is a plain async function, independent of LangGraph; the state adapter that wraps
-it into a graph node is added with the fused-query task (todo Task 22). The prompt lives
-in-repo via the prompt registry for now; Langfuse-managed resolution is deferred to Task
-28. Extraction keeps the project-wide reason-by-default (`think=True`): unlike the
+This is a plain async function, independent of LangGraph; the `ocr_extract` node (in the
+workflow assembly) drives it as the second of the three digitization passes. The prompt
+lives in-repo via the prompt registry for now; Langfuse-managed resolution is deferred to
+Task 28. Extraction keeps the project-wide reason-by-default (`think=True`): unlike the
 mechanical OCR copy, deciding which token is a date, an amount, or a reference is
 interpretive and earns the reasoning pass. As with triage, a leaked reasoning trace
 simply fails the JSON parse and drives a retry, so the schema is the leak's safety net

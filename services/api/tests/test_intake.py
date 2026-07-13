@@ -26,10 +26,13 @@ from app.schemas.enums import TicketStatus
 from app.schemas.kb import KBSearchResult, KBSource
 
 # Happy-path model script, one response per model-using step in graph order:
-# screen_input → triage → draft → validate → screen_output.
+# screen_input → ocr_extract (search-intent fusion) → triage → draft → validate →
+# screen_output. The ocr_extract node runs on every ticket; a text-only submission
+# skips transcription/extraction and only fuses the query from the message.
 _DRAFT_BODY = "You can reset your password from the login screen. [KB-1]"
 _HAPPY_PATH_SCRIPT = [
     '{"is_injection": false}',
+    "reset online banking password",
     '{"category": "account_access", "urgency": "normal", "sentiment": "neutral"}',
     _DRAFT_BODY,
     '{"score": 1.0, "unsupported_claims": []}',
