@@ -25,6 +25,8 @@ dependencies = [
     "langgraph-checkpoint-postgres>=2,<3",
     # api (Task 23): authenticated encryption (Fernet) for PII at rest (SPEC §6).
     "cryptography>=43,<47",
+    # api (Task 24): structured logging with a PII-redaction processor (SPEC §6).
+    "structlog>=24,<26",
 ]
 
 [dependency-groups]
