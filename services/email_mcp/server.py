@@ -103,6 +103,25 @@ def record_sent_reply(ticket_id: int, reply: str, rep_id: str) -> dict[str, Any]
         return db.record_sent_reply(conn, ticket_id=ticket_id, reply=reply, rep_id=rep_id)
 
 
+@mcp.tool()
+def record_audit(
+    ticket_id: int,
+    event: str,
+    actor: str | None = None,
+    detail: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Append one immutable audit entry for a ticket and return the stored row."""
+    with db.connect_from_env() as conn:
+        return db.record_audit(conn, ticket_id=ticket_id, event=event, actor=actor, detail=detail)
+
+
+@mcp.tool()
+def get_audit_trail(ticket_id: int) -> list[dict[str, Any]]:
+    """Return a ticket's audit entries in insertion order (SPEC §7.1)."""
+    with db.connect_from_env() as conn:
+        return db.get_audit_trail(conn, ticket_id)
+
+
 def main() -> None:
     """Run the MCP server over streamable-HTTP (SPEC §6: api↔MCP over HTTP)."""
     mcp.run(transport="streamable-http")

@@ -49,20 +49,21 @@ Order is dependency-correct; do not start a task before its dependencies are che
 
 ## Phase 8 — Security & encryption
 - [x] **23.** PII encryption at rest (AES-GCM/Fernet) — *deps: 3,21*
-- [ ] **24.** structlog + PII redaction + input hardening + auth enforcement — *deps: 4,23*
-- [ ] **25.** compliance audit trail — *deps: 3,18*
+- [x] **24.** structlog + PII redaction + input hardening + auth enforcement — *deps: 4,23*
+- [x] **25.** compliance audit trail — foundation: immutable audit store + record/read MCP tools + api client — *deps: 3,18*
+- [ ] **26.** compliance audit trail — emission: record node outcomes (cited sources, model tag + prompt version, guardrail decisions) + rep edit/approve; completeness integration test — *deps: 16,17,18,25*
 
 ## Phase 9 — Feedback, training corpus, dynamic prompting
-- [ ] **26.** feedback capture (approved/edited-diff/rejected + rating) — *deps: 18,25*
-- [ ] **27.** training corpus (SFT + preference pairs) + export JSONL + PII test — *deps: 26*
-- [ ] **28.** dynamic prompting: Langfuse prompts + deterministic few-shot — *deps: 13,26*
+- [ ] **27.** feedback capture (approved/edited-diff/rejected + rating) — *deps: 18,26*
+- [ ] **28.** training corpus (SFT + preference pairs) + export JSONL + PII test — *deps: 27*
+- [ ] **29.** dynamic prompting: Langfuse prompts + deterministic few-shot — *deps: 13,27*
 
 ## Phase 10 — Observability
-- [ ] **29.** Langfuse service + one PII-redacted trace per ticket + scores — *deps: 17,24,26*
+- [ ] **30.** Langfuse service + one PII-redacted trace per ticket + scores — *deps: 17,24,27*
 
 ## Phase 11 — Evals + CI
-- [ ] **30.** eval + red-team suites + runner + eval-gated promotion — *deps: 15,16,28*
-- [ ] **31.** CI pipeline (.github/workflows/ci.yml) — *deps: 30*
+- [ ] **31.** eval + red-team suites + runner + eval-gated promotion — *deps: 15,16,29*
+- [ ] **32.** CI pipeline (.github/workflows/ci.yml) — *deps: 31*
 - [ ] **Checkpoint D** — complete: all §13 invariants covered, eval + security gates green
 
 ---

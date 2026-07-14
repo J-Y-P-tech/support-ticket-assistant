@@ -123,6 +123,38 @@ class EmailMCPClient(MCPClient):
             )
         )
 
+    async def record_audit(
+        self,
+        ticket_id: int,
+        event: str,
+        *,
+        actor: str | None = None,
+        detail: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Append one immutable audit entry for a ticket (SPEC §7.1).
+
+        The api's write path into the compliance trail: each workflow-node outcome
+        and rep action is recorded through here. A write — `retry_on_disconnect` is
+        left off so a dropped connection surfaces rather than risking a duplicate
+        audit row on a reconnect-retry.
+        """
+        payload = await self.call_tool(
+            "record_audit",
+            {"ticket_id": ticket_id, "event": event, "actor": actor, "detail": detail},
+        )
+        return cast("dict[str, Any]", payload)
+
+    async def get_audit_trail(self, ticket_id: int) -> list[dict[str, Any]]:
+        """Return a ticket's audit entries in insertion order (SPEC §7.1).
+
+        An idempotent read: `retry_on_disconnect` is on, so a dropped connection can
+        be safely re-run.
+        """
+        payload = await self.call_tool(
+            "get_audit_trail", {"ticket_id": ticket_id}, retry_on_disconnect=True
+        )
+        return cast("list[dict[str, Any]]", payload)
+
 
 def get_email_client(
     request: Request, settings: Settings = Depends(get_settings)

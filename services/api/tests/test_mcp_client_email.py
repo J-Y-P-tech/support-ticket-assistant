@@ -149,6 +149,63 @@ async def test_fetch_new_tickets_returns_list(
     assert await wrapper.fetch_new_tickets(limit=50) == rows
 
 
+async def test_record_audit_forwards_arguments_as_a_write(
+    wrapper: EmailMCPClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`record_audit` calls the `record_audit` tool with the event fields, no retry.
+
+    Recording an audit entry is a non-idempotent write — a reconnect-retry would
+    append a duplicate row — so, like `create_ticket`, it must leave
+    `retry_on_disconnect` off and let a dropped connection surface as an error.
+    """
+    seen: dict[str, Any] = {}
+
+    async def fake_call(
+        tool: str, arguments: dict[str, Any], *, retry_on_disconnect: bool = False
+    ) -> Any:
+        seen["tool"] = tool
+        seen["arguments"] = arguments
+        seen["retry"] = retry_on_disconnect
+        return {"event": "triaged", "actor": "system", "detail": None, "created_at": "t"}
+
+    monkeypatch.setattr(wrapper, "call_tool", fake_call)
+
+    await wrapper.record_audit(7, "triaged", actor="system", detail={"category": "billing"})
+
+    assert seen["tool"] == "record_audit"
+    assert seen["arguments"] == {
+        "ticket_id": 7,
+        "event": "triaged",
+        "actor": "system",
+        "detail": {"category": "billing"},
+    }
+    assert seen["retry"] is False
+
+
+async def test_get_audit_trail_returns_list_and_opts_into_retry(
+    wrapper: EmailMCPClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`get_audit_trail` returns the trail list and opts into the read retry.
+
+    Reading a ticket's trail is an idempotent lookup, so it passes
+    `retry_on_disconnect=True` like the other reads — a dropped connection can be
+    safely re-run.
+    """
+    trail = [{"event": "ticket_created", "actor": "customer", "detail": None, "created_at": "t"}]
+    seen: dict[str, Any] = {}
+
+    async def fake_call(
+        tool: str, arguments: dict[str, Any], *, retry_on_disconnect: bool = False
+    ) -> Any:
+        seen["retry"] = retry_on_disconnect
+        return trail
+
+    monkeypatch.setattr(wrapper, "call_tool", fake_call)
+
+    assert await wrapper.get_audit_trail(7) == trail
+    assert seen["retry"] is True
+
+
 async def test_reads_opt_into_retry_but_writes_do_not(
     wrapper: EmailMCPClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:

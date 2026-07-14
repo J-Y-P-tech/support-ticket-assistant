@@ -293,6 +293,36 @@ def record_sent_reply(
     return get_ticket(conn, ticket_id)
 
 
+def record_audit(
+    conn: Connection,
+    *,
+    ticket_id: int,
+    event: str,
+    actor: str | None = None,
+    detail: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Append one immutable audit entry, commit it, and return the stored row.
+
+    The public, committing entry point the api uses to record each workflow-node
+    outcome and rep action through the email_mcp boundary (SPEC §7.1). Unlike the
+    internal `_record_audit` helper — which the ticket tools batch inside their own
+    transaction — this commits on its own, because the api records one entry per
+    node as an independent operation. The audit table is DB-enforced immutable
+    (migration 0002), so a recorded entry can never be altered or removed.
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "INSERT INTO audit (ticket_id, event, actor, detail) VALUES (%s, %s, %s, %s) "
+            "RETURNING event, actor, detail, created_at",
+            (ticket_id, event, actor, Jsonb(detail) if detail is not None else None),
+        )
+        row = cur.fetchone()
+    assert row is not None  # INSERT ... RETURNING always yields the new row.
+    row["created_at"] = _iso(row["created_at"])
+    conn.commit()
+    return row
+
+
 def get_audit_trail(conn: Connection, ticket_id: int) -> list[dict[str, Any]]:
     """Return a ticket's audit entries in insertion order (SPEC §7.1)."""
     with conn.cursor(row_factory=dict_row) as cur:
