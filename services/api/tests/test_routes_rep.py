@@ -400,3 +400,63 @@ async def test_reject_requires_auth(build_paused_workflow: Any, rep_client: Any)
         rejected = await ac.post("/rep/tickets/7/reject", json={"rep_id": "rep-1"})
 
     assert rejected.status_code == 401
+
+
+# --- Rep-action audit emission (plan Task 24 / todo Task 26) ------------------
+#
+# SPEC §7.1 requires the rep's edit and approve to land on the ticket's immutable
+# audit trail. These routes only *stage* a decision (no send), so nothing else would
+# record them — the route itself writes the audit row via email_mcp.
+
+
+async def test_edit_records_a_draft_edited_audit_entry(
+    build_paused_workflow: Any,
+    rep_client: Any,
+    email_client: FakeEmailClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """Staging an edit writes a `draft_edited` audit row attributed to the rep.
+
+    An edit stages the rep's text without sending, so unless the route records it the
+    trail would never show the rep touched the draft. The row is attributed to the
+    generic `rep` actor (per-rep identity is not modelled yet).
+    """
+    email_client.register_ticket(7, "TKT-0007", status="Drafted")
+    graph = await build_paused_workflow(ticket_id=7)
+
+    async with rep_client(graph) as ac:
+        # Stage an edited reply into the paused case.
+        edit = await ac.post(
+            "/rep/tickets/7/edit",
+            json={"reply": "Reset it from the login screen."},
+            headers=auth_headers,
+        )
+
+    # The edit is accepted.
+    assert edit.status_code == 200
+    # A `draft_edited` audit row was recorded for ticket 7, attributed to the rep.
+    assert ("record_audit", 7, "draft_edited", "rep", None) in email_client.calls
+
+
+async def test_approve_records_a_draft_approved_audit_entry(
+    build_paused_workflow: Any,
+    rep_client: Any,
+    email_client: FakeEmailClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """Staging an approve writes a `draft_approved` audit row attributed to the rep.
+
+    Approve alone never sends, so the trail would not otherwise record the rep's
+    approval; the route writes it, attributed to the generic `rep` actor.
+    """
+    email_client.register_ticket(7, "TKT-0007", status="Drafted")
+    graph = await build_paused_workflow(ticket_id=7)
+
+    async with rep_client(graph) as ac:
+        # Stage an approve-as-is decision on the paused case.
+        approved = await ac.post("/rep/tickets/7/approve", headers=auth_headers)
+
+    # The approve is accepted.
+    assert approved.status_code == 200
+    # A `draft_approved` audit row was recorded for ticket 7, attributed to the rep.
+    assert ("record_audit", 7, "draft_approved", "rep", None) in email_client.calls

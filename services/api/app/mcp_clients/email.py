@@ -16,14 +16,20 @@ from __future__ import annotations
 
 from typing import Any, cast
 
-from fastapi import Depends, Request
+from fastapi import Depends, FastAPI, Request
 
 from app.config import Settings, get_settings
 from app.mcp_clients.base import MCPClient, MCPToolError, _parse_tool_result
 
 # `_parse_tool_result` is re-exported for the wrapper's unit tests, which exercise
 # the shared parser directly against the email error type.
-__all__ = ["EmailMCPClient", "EmailMCPError", "get_email_client", "_parse_tool_result"]
+__all__ = [
+    "EmailMCPClient",
+    "EmailMCPError",
+    "email_client_for_app",
+    "get_email_client",
+    "_parse_tool_result",
+]
 
 
 class EmailMCPError(MCPToolError):
@@ -156,21 +162,33 @@ class EmailMCPClient(MCPClient):
         return cast("list[dict[str, Any]]", payload)
 
 
-def get_email_client(
-    request: Request, settings: Settings = Depends(get_settings)
-) -> EmailMCPClient:
-    """FastAPI dependency: return the process-wide shared `EmailMCPClient`.
+def email_client_for_app(app: FastAPI, settings: Settings) -> EmailMCPClient:
+    """Return the app's process-wide shared `EmailMCPClient`, building it on first use.
 
-    Because the client holds a reused session, it must be a singleton rather than
-    built per request. It is created lazily on first use and cached on `app.state`
-    (closed by the app lifespan on shutdown). Overridden in tests with an in-memory
-    fake, so routes never touch the network under test.
+    The client holds a reused streamable-HTTP session, so it must be a singleton
+    cached on `app.state` (closed by the app lifespan on shutdown), not built per
+    call. Shared by the `get_email_client` request dependency and the submit-time
+    pipeline trigger, so a ticket's routes and its background audit emission write
+    through the same client. Overridden in tests by setting `app.state.email_client`
+    to an in-memory fake, so nothing touches the network under test.
     """
-    client = getattr(request.app.state, "email_client", None)
+    client = getattr(app.state, "email_client", None)
     if client is None:
         client = EmailMCPClient(
             url=settings.email_mcp_url,
             token=settings.email_mcp_token.get_secret_value(),
         )
-        request.app.state.email_client = client
+        app.state.email_client = client
     return cast("EmailMCPClient", client)
+
+
+def get_email_client(
+    request: Request, settings: Settings = Depends(get_settings)
+) -> EmailMCPClient:
+    """FastAPI dependency: return the process-wide shared `EmailMCPClient`.
+
+    A thin request-scoped wrapper over `email_client_for_app`, so routes and the
+    submit-time pipeline trigger resolve the same cached client. Overridden in tests
+    with an in-memory fake, so routes never touch the network under test.
+    """
+    return email_client_for_app(request.app, settings)

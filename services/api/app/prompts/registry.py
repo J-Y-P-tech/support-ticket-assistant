@@ -263,3 +263,25 @@ def get_prompt(name: str) -> str:
         return _PROMPTS[name]
     except KeyError:
         raise KeyError(f"no prompt registered under {name!r}") from None
+
+
+# The version label each prompt is on. The compliance audit trail records the prompt
+# version a node used (SPEC §7.1), so any reply ties back to the exact prompt that
+# produced it. Every in-repo prompt starts at "<name>-v1"; when Task 28 fronts the
+# registry with Langfuse, a resolved prompt's version replaces the pinned one here, so
+# the audit records the true version in force. Kept in lock-step with `_PROMPTS`: a
+# prompt without a version would leave its node's audit row unlabelled.
+_PROMPT_VERSIONS: dict[str, str] = {name: f"{name}-v1" for name in _PROMPTS}
+
+
+def get_prompt_version(name: str) -> str:
+    """Return the version label of the prompt registered under `name`.
+
+    The audit seam's companion to `get_prompt`: the trail records *which* version of
+    each instruction the AI used. Raises `KeyError` for an unknown name — the same
+    fail-loud contract as `get_prompt`, so a typo never yields a blank version.
+    """
+    try:
+        return _PROMPT_VERSIONS[name]
+    except KeyError:
+        raise KeyError(f"no prompt registered under {name!r}") from None

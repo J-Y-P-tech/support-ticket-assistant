@@ -42,6 +42,12 @@ from app.security import require_auth
 
 router = APIRouter(prefix="/rep", dependencies=[Depends(require_auth)])
 
+# The actor recorded for a rep's staged edit/approve on the audit trail. Per-rep
+# identity is not modelled yet (one shared api token, see `app.schemas.rep`), so a
+# generic marker attributes these actions to "a rep" until real rep logins land. The
+# send/reject actions carry the rep's own `rep_id` instead (SPEC §4.7).
+_REP_ACTOR = "rep"
+
 
 def _parse_cursor(after: str | None) -> tuple[str, int] | None:
     """Parse an `after` cursor (`<created_at>,<id>`) into `(created_at, id)`.
@@ -148,12 +154,15 @@ async def rep_edit(
     ticket_id: int,
     payload: RepEditRequest,
     workflow: CompiledStateGraph = Depends(get_workflow),
+    email: EmailMCPClient = Depends(get_email_client),
 ) -> RepActionResult:
     """Stage the rep's edited reply into the paused case (held until send).
 
     Records the edited text and an `edited` decision on the paused run without
-    resuming it — the edit becomes the customer reply only when the rep sends. Nothing
-    is written to email_mcp here; the case stays awaiting review.
+    resuming it — the edit becomes the customer reply only when the rep sends. The
+    edit is recorded on the ticket's audit trail (SPEC §7.1 rep edits): staging alone
+    never sends, so unless it is recorded here the trail would never show the rep
+    touched the draft. The case stays awaiting review.
     """
     await _require_review_pause(workflow, ticket_id)
     config = thread_config(ticket_id)
@@ -161,6 +170,7 @@ async def rep_edit(
         config,
         {"rep_edited_reply": payload.reply, "rep_decision": FeedbackDecision.EDITED},
     )
+    await email.record_audit(ticket_id, "draft_edited", actor=_REP_ACTOR)
     values = (await workflow.aget_state(config)).values
     return RepActionResult(ticket_id=ticket_id, status=values["status"], reply=None)
 
@@ -169,15 +179,19 @@ async def rep_edit(
 async def rep_approve(
     ticket_id: int,
     workflow: CompiledStateGraph = Depends(get_workflow),
+    email: EmailMCPClient = Depends(get_email_client),
 ) -> RepActionResult:
     """Stage an approve-as-is decision on the paused case (does not send).
 
     Approve alone never resolves a case (SPEC §4.7): it records the decision on the
-    paused run and leaves it awaiting review. A later `send` commits it.
+    paused run and leaves it awaiting review. The approval is recorded on the ticket's
+    audit trail (SPEC §7.1) — staging alone never sends, so nothing else would capture
+    it. A later `send` commits it.
     """
     await _require_review_pause(workflow, ticket_id)
     config = thread_config(ticket_id)
     await workflow.aupdate_state(config, {"rep_decision": FeedbackDecision.APPROVED_AS_IS})
+    await email.record_audit(ticket_id, "draft_approved", actor=_REP_ACTOR)
     values = (await workflow.aget_state(config)).values
     return RepActionResult(ticket_id=ticket_id, status=values["status"], reply=None)
 

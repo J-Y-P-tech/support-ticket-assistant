@@ -27,8 +27,10 @@ from typing import Any, Protocol
 from fastapi import FastAPI
 
 from app.config import Settings
+from app.graph.audit import record_node_audits
 from app.graph.runtime import get_workflow_for_app
 from app.graph.workflow import thread_config
+from app.mcp_clients.email import email_client_for_app
 from app.schemas.enums import TicketStatus
 
 _logger = logging.getLogger(__name__)
@@ -66,9 +68,12 @@ async def start_pipeline(
 
     Invoked as a background task after the submit response is sent. Drives the graph to
     its `human_review` interrupt on the ticket's checkpoint thread; the paused state is
-    what the rep-action routes later resume. Any failure is swallowed and logged, so a
-    background crash never affects the already-returned submit — the ticket stays New
-    for a rep to pick up by hand.
+    what the rep-action routes later resume. Once the run reaches the pause, the
+    node-outcome audit rows are written to the ticket's immutable trail (SPEC §7.1) —
+    each node's outcome, its cited sources, the model tag + prompt version, and the
+    guardrail decisions. Any failure is swallowed and logged, so a background crash
+    never affects the already-returned submit — the ticket stays New for a rep to pick
+    up by hand.
     """
     initial: dict[str, Any] = {
         "ticket_id": ticket_id,
@@ -78,9 +83,18 @@ async def start_pipeline(
         "flags": [],
         "status": TicketStatus.NEW,
     }
+    config = thread_config(ticket_id)
     try:
         workflow = await get_workflow_for_app(app, settings)
-        await workflow.ainvoke(initial, thread_config(ticket_id))
+        await workflow.ainvoke(initial, config)
+        # The run is now paused at the human gate; record what the pipeline did on the
+        # ticket's compliance trail. Reading the paused snapshot (rather than ainvoke's
+        # return) keeps this robust to how the interrupt surfaces the state.
+        snapshot = await workflow.aget_state(config)
+        email = email_client_for_app(app, settings)
+        await record_node_audits(
+            email, ticket_id=ticket_id, state=snapshot.values, model=settings.llm_model
+        )
     except Exception:
         _logger.exception("pipeline failed for ticket %s; left New for manual handling", ticket_id)
 

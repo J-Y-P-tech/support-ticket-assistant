@@ -75,6 +75,11 @@ class FakeEmailClient:
         self.tickets_by_id: dict[int, dict[str, Any] | None] = {}
         self.queue_rows: list[dict[str, Any]] = []
         self.calls: list[tuple[Any, ...]] = []
+        # The in-memory stand-in for the immutable `audit` table: one dict per
+        # recorded entry, in the order they were written. It mirrors the real
+        # email_mcp trail, so a route/pipeline test can read back the ordered
+        # compliance history a `get_audit_trail` call would return (plan Task 24).
+        self.audit: list[dict[str, Any]] = []
 
     async def create_ticket(
         self, message: str, attachments: list[str] | None = None
@@ -155,6 +160,9 @@ class FakeEmailClient:
             return None
         ticket["reply"] = reply
         ticket["status"] = "Resolved"
+        # email_mcp writes a `reply_sent` audit row inside record_sent_reply, so the
+        # send shows up on the ticket's trail attributed to the rep — mirror that here.
+        self._append_audit(ticket_id, "reply_sent", actor=rep_id, detail=None)
         return ticket
 
     async def update_status(
@@ -170,7 +178,37 @@ class FakeEmailClient:
         if ticket is None:
             return None
         ticket["status"] = status
+        # email_mcp writes a `status_changed` audit row inside update_status; mirror it.
+        self._append_audit(ticket_id, "status_changed", actor=actor, detail={"to": status})
         return ticket
+
+    def _append_audit(
+        self, ticket_id: int, event: str, *, actor: str | None, detail: dict[str, Any] | None
+    ) -> dict[str, Any]:
+        """Append one entry to the in-memory audit ledger and return the stored row."""
+        row = {"ticket_id": ticket_id, "event": event, "actor": actor, "detail": detail}
+        self.audit.append(row)
+        return row
+
+    async def record_audit(
+        self,
+        ticket_id: int,
+        event: str,
+        *,
+        actor: str | None = None,
+        detail: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Record one immutable audit entry, matching the real client's signature.
+
+        Appends to `calls` (so a test can assert the api emitted a given event) and to
+        the `audit` ledger (so `get_audit_trail` reads it back in insertion order).
+        """
+        self.calls.append(("record_audit", ticket_id, event, actor, detail))
+        return self._append_audit(ticket_id, event, actor=actor, detail=detail)
+
+    async def get_audit_trail(self, ticket_id: int) -> list[dict[str, Any]]:
+        """Return this ticket's audit entries in insertion order (neutral empty list)."""
+        return [row for row in self.audit if row["ticket_id"] == ticket_id]
 
 
 @pytest.fixture
