@@ -26,6 +26,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import StateSnapshot
 
 from app.config import Settings, get_settings
+from app.graph.feedback import record_feedback
 from app.graph.runtime import get_workflow
 from app.graph.workflow import thread_config
 from app.mcp_clients.email import EmailMCPClient, get_email_client
@@ -223,6 +224,12 @@ async def rep_send(
         # resolve. reject() is the route for routing a case back.
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Ticket cannot be sent")
     await email.record_sent_reply(ticket_id, reply, payload.rep_id)
+    # Capture the rep's disposition (approved-as-is / edited, with the AI-vs-final diff)
+    # plus any rating/reason into the feedback table (SPEC §4.9); the finished state
+    # carries the AI draft and the sent reply the record is built from.
+    await record_feedback(
+        email, ticket_id=ticket_id, state=final, rating=payload.rating, reason=payload.reason
+    )
     return RepActionResult(ticket_id=ticket_id, status=TicketStatus.RESOLVED, reply=reply)
 
 
@@ -245,4 +252,10 @@ async def rep_reject(
     final = await workflow.ainvoke(None, config)
     result_status = final.get("status", TicketStatus.NEEDS_RESEARCH)
     await email.update_status(ticket_id, TicketStatus.NEEDS_RESEARCH.value, actor=payload.rep_id)
+    # Capture the rejection (the discarded draft, no final reply) plus any rating/reason
+    # into the feedback table — the negative example the preference corpus consumes
+    # (SPEC §4.9 / §4.9a). A hand-off with no draft records nothing (nothing to rate).
+    await record_feedback(
+        email, ticket_id=ticket_id, state=final, rating=payload.rating, reason=payload.reason
+    )
     return RepActionResult(ticket_id=ticket_id, status=result_status, reply=None)

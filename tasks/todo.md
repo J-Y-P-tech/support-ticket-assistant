@@ -51,10 +51,10 @@ Order is dependency-correct; do not start a task before its dependencies are che
 - [x] **23.** PII encryption at rest (AES-GCM/Fernet) — *deps: 3,21*
 - [x] **24.** structlog + PII redaction + input hardening + auth enforcement — *deps: 4,23*
 - [x] **25.** compliance audit trail — foundation: immutable audit store + record/read MCP tools + api client — *deps: 3,18*
-- [ ] **26.** compliance audit trail — emission: record node outcomes (cited sources, model tag + prompt version, guardrail decisions) + rep edit/approve; completeness integration test — *deps: 16,17,18,25*
+- [x] **26.** compliance audit trail — emission: record node outcomes (cited sources, model tag + prompt version, guardrail decisions) + rep edit/approve; completeness integration test — *deps: 16,17,18,25*
 
 ## Phase 9 — Feedback, training corpus, dynamic prompting
-- [ ] **27.** feedback capture (approved/edited-diff/rejected + rating) — *deps: 18,26*
+- [x] **27.** feedback capture (approved/edited-diff/rejected + rating) — *deps: 18,26*
 - [ ] **28.** training corpus (SFT + preference pairs) + export JSONL + PII test — *deps: 27*
 - [ ] **29.** dynamic prompting: Langfuse prompts + deterministic few-shot — *deps: 13,27*
 

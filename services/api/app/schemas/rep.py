@@ -33,9 +33,16 @@ class RepEditRequest(BaseModel):
 
 
 class RepSendRequest(BaseModel):
-    """The rep marker authorising a send; required to resolve the case (SPEC §4.7)."""
+    """The rep marker authorising a send, plus the optional feedback the send captures.
+
+    `rating` and `reason` are the optional rep feedback SPEC §4.9 records with the
+    disposition; the rep supplies them on the action that commits the decision, and both
+    default to absent so an existing caller that sends without them keeps working.
+    """
 
     rep_id: str
+    rating: int | None = None
+    reason: str | None = None
 
     @field_validator("rep_id")
     @classmethod
@@ -47,10 +54,15 @@ class RepSendRequest(BaseModel):
 
 
 class RepRejectRequest(BaseModel):
-    """The rep marker for a rejection, plus an optional reason for the audit trail."""
+    """The rep marker for a rejection, plus the optional feedback the rejection captures.
+
+    `reason` doubles as the audit-trail note and the feedback reason; `rating` is the
+    optional rep rating SPEC §4.9 records with the disposition. Both are optional.
+    """
 
     rep_id: str
     reason: str | None = None
+    rating: int | None = None
 
     @field_validator("rep_id")
     @classmethod

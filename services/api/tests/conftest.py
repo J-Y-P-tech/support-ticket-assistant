@@ -80,6 +80,10 @@ class FakeEmailClient:
         # email_mcp trail, so a route/pipeline test can read back the ordered
         # compliance history a `get_audit_trail` call would return (plan Task 24).
         self.audit: list[dict[str, Any]] = []
+        # The in-memory stand-in for the `feedback` table: one dict per rep-decision
+        # row, in the order they were written, so a route test can assert the
+        # disposition the send/reject action captured (plan Task 25 / todo Task 27).
+        self.feedback: list[dict[str, Any]] = []
 
     async def create_ticket(
         self, message: str, attachments: list[str] | None = None
@@ -209,6 +213,18 @@ class FakeEmailClient:
     async def get_audit_trail(self, ticket_id: int) -> list[dict[str, Any]]:
         """Return this ticket's audit entries in insertion order (neutral empty list)."""
         return [row for row in self.audit if row["ticket_id"] == ticket_id]
+
+    async def record_feedback(self, ticket_id: int, record: Any) -> dict[str, Any]:
+        """Record one rep-decision feedback row, matching the real client's signature.
+
+        Appends to `calls` (so a test can assert the api emitted feedback) and to the
+        `feedback` ledger as the flattened row email_mcp would store, so a route test
+        can read back the captured disposition (decision, diff, rating, reason).
+        """
+        self.calls.append(("record_feedback", ticket_id, record.decision))
+        row = {"ticket_id": ticket_id, **record.model_dump(mode="json")}
+        self.feedback.append(row)
+        return row
 
 
 @pytest.fixture

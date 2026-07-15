@@ -254,7 +254,9 @@ async def test_approve_then_send_resolves_and_records_reply(
     body = sent.json()
     assert body["status"] == "Resolved"
     assert body["reply"] == HAPPY_DRAFT_BODY
-    assert email_client.calls[-1] == ("record_sent_reply", 7, HAPPY_DRAFT_BODY, "rep-1")
+    # The route forwarded the drafted body to email_mcp under the rep's marker (the
+    # feedback-capture call now follows it, so this is no longer the final call).
+    assert ("record_sent_reply", 7, HAPPY_DRAFT_BODY, "rep-1") in email_client.calls
 
 
 async def test_sent_reply_is_visible_via_customer_lookup(
@@ -306,7 +308,8 @@ async def test_edit_then_send_uses_the_edited_reply(
     assert edit.status_code == 200
     assert sent.status_code == 200
     assert sent.json()["reply"] == edited
-    assert email_client.calls[-1] == ("record_sent_reply", 7, edited, "rep-9")
+    # The edited reply — not the AI draft — was the text forwarded to email_mcp.
+    assert ("record_sent_reply", 7, edited, "rep-9") in email_client.calls
 
 
 async def test_reject_routes_case_back_to_needs_research(
@@ -333,7 +336,8 @@ async def test_reject_routes_case_back_to_needs_research(
 
     assert rejected.status_code == 200
     assert rejected.json()["status"] == "NeedsResearch"
-    assert email_client.calls[-1] == ("update_status", 7, "NeedsResearch", "rep-3")
+    # The case was routed back via update_status (the feedback-capture call now follows).
+    assert ("update_status", 7, "NeedsResearch", "rep-3") in email_client.calls
     assert not any(call[0] == "record_sent_reply" for call in email_client.calls)
 
 
@@ -460,3 +464,112 @@ async def test_approve_records_a_draft_approved_audit_entry(
     assert approved.status_code == 200
     # A `draft_approved` audit row was recorded for ticket 7, attributed to the rep.
     assert ("record_audit", 7, "draft_approved", "rep", None) in email_client.calls
+
+
+# --- Feedback capture on disposition (plan Task 25 / todo Task 27) -------------
+#
+# SPEC §4.9 records every rep decision — approved-as-is / edited (with the AI-vs-final
+# diff) / rejected, plus an optional rating and reason — into the feedback table. The
+# send/reject routes own the write: they resume the graph through `finalize`, so the
+# finished state carries the AI draft and the final reply the record is built from.
+
+
+async def test_approve_then_send_records_approved_feedback(
+    build_paused_workflow: Any,
+    rep_client: Any,
+    email_client: FakeEmailClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """An approved-as-is send captures a feedback row with a zero edit distance.
+
+    The rep approved the AI draft unchanged, so the final reply matches the draft and
+    the recorded edit distance is zero. The optional rating the rep passed on the send
+    is carried onto the row (SPEC §4.9).
+    """
+    email_client.register_ticket(7, "TKT-0007", status="Drafted")
+    graph = await build_paused_workflow(ticket_id=7)
+
+    async with rep_client(graph) as ac:
+        await ac.post("/rep/tickets/7/approve", headers=auth_headers)
+        sent = await ac.post(
+            "/rep/tickets/7/send",
+            json={"rep_id": "rep-1", "rating": 5},
+            headers=auth_headers,
+        )
+
+    assert sent.status_code == 200
+    assert len(email_client.feedback) == 1
+    row = email_client.feedback[0]
+    assert row["ticket_id"] == 7
+    assert row["decision"] == "approved_as_is"
+    assert row["ai_draft"] == HAPPY_DRAFT_BODY
+    assert row["final_reply"] == HAPPY_DRAFT_BODY
+    assert row["edit_distance"] == 0
+    assert row["rating"] == 5
+
+
+async def test_edit_then_send_records_edited_feedback_with_distance(
+    build_paused_workflow: Any,
+    rep_client: Any,
+    email_client: FakeEmailClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """An edited send captures both texts, a positive edit distance, and the reason.
+
+    The rep rewrote the draft before sending, so the feedback row keeps the AI draft
+    and the edited final reply with a non-zero character distance between them, plus
+    the reason the rep gave (SPEC §4.9).
+    """
+    edited = "Please reset your password from the login screen and call us if it fails."
+    email_client.register_ticket(7, "TKT-0007", status="Drafted")
+    graph = await build_paused_workflow(ticket_id=7)
+
+    async with rep_client(graph) as ac:
+        await ac.post("/rep/tickets/7/edit", json={"reply": edited}, headers=auth_headers)
+        sent = await ac.post(
+            "/rep/tickets/7/send",
+            json={"rep_id": "rep-9", "reason": "tightened the tone"},
+            headers=auth_headers,
+        )
+
+    assert sent.status_code == 200
+    assert len(email_client.feedback) == 1
+    row = email_client.feedback[0]
+    assert row["decision"] == "edited"
+    assert row["ai_draft"] == HAPPY_DRAFT_BODY
+    assert row["final_reply"] == edited
+    assert row["edit_distance"] > 0
+    assert row["reason"] == "tightened the tone"
+
+
+async def test_reject_records_rejected_feedback(
+    build_paused_workflow: Any,
+    rep_client: Any,
+    email_client: FakeEmailClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """Rejecting a draft captures a rejected feedback row with no final reply.
+
+    A rejection produces no customer reply, so the row keeps the discarded AI draft
+    with a null final reply and no edit distance, carrying the rep's rating/reason —
+    the negative example the preference corpus consumes (SPEC §4.9 / §4.9a).
+    """
+    email_client.register_ticket(7, "TKT-0007", status="Drafted")
+    graph = await build_paused_workflow(ticket_id=7)
+
+    async with rep_client(graph) as ac:
+        rejected = await ac.post(
+            "/rep/tickets/7/reject",
+            json={"rep_id": "rep-3", "reason": "needs a second source", "rating": 2},
+            headers=auth_headers,
+        )
+
+    assert rejected.status_code == 200
+    assert len(email_client.feedback) == 1
+    row = email_client.feedback[0]
+    assert row["decision"] == "rejected"
+    assert row["ai_draft"] == HAPPY_DRAFT_BODY
+    assert row["final_reply"] is None
+    assert row["edit_distance"] is None
+    assert row["rating"] == 2
+    assert row["reason"] == "needs a second source"

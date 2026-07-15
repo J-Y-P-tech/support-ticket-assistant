@@ -122,6 +122,39 @@ def get_audit_trail(ticket_id: int) -> list[dict[str, Any]]:
         return db.get_audit_trail(conn, ticket_id)
 
 
+@mcp.tool()
+def record_feedback(
+    ticket_id: int,
+    decision: str,
+    ai_draft: str,
+    final_reply: str | None = None,
+    edit_distance: int | None = None,
+    rating: int | None = None,
+    reason: str | None = None,
+    draft_id: int | None = None,
+) -> dict[str, Any]:
+    """Persist one rep-decision feedback row and return it (SPEC §4.9)."""
+    with db.connect_from_env() as conn:
+        return db.record_feedback(
+            conn,
+            ticket_id=ticket_id,
+            decision=decision,
+            ai_draft=ai_draft,
+            final_reply=final_reply,
+            edit_distance=edit_distance,
+            rating=rating,
+            reason=reason,
+            draft_id=draft_id,
+        )
+
+
+@mcp.tool()
+def get_feedback(ticket_id: int) -> list[dict[str, Any]]:
+    """Return a ticket's feedback rows in insertion order (SPEC §4.9)."""
+    with db.connect_from_env() as conn:
+        return db.get_feedback(conn, ticket_id)
+
+
 def main() -> None:
     """Run the MCP server over streamable-HTTP (SPEC §6: api↔MCP over HTTP)."""
     mcp.run(transport="streamable-http")

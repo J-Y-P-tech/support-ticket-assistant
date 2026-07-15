@@ -335,3 +335,57 @@ def get_audit_trail(conn: Connection, ticket_id: int) -> list[dict[str, Any]]:
     for row in rows:
         row["created_at"] = _iso(row["created_at"])
     return rows
+
+
+# --------------------------------------------------------------------------- #
+# Feedback tools
+# --------------------------------------------------------------------------- #
+def record_feedback(
+    conn: Connection,
+    *,
+    ticket_id: int,
+    decision: str,
+    ai_draft: str,
+    final_reply: str | None = None,
+    edit_distance: int | None = None,
+    rating: int | None = None,
+    reason: str | None = None,
+    draft_id: int | None = None,
+) -> dict[str, Any]:
+    """Persist one rep-decision feedback row and return it (SPEC §4.9).
+
+    Records how a rep disposed of an AI draft — approved-as-is / edited (with the diff
+    distance between the draft and the final reply) / rejected — plus the optional
+    rating and reason. `final_reply`/`edit_distance` are absent for a rejection (no
+    reply was sent); `rating`/`reason` are optional throughout. The row feeds the
+    quality loop (§7.4) and the de-identified training corpus (§4.9a).
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "INSERT INTO feedback "
+            "(ticket_id, draft_id, decision, ai_draft, final_reply, edit_distance, rating, reason) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
+            "RETURNING id, ticket_id, draft_id, decision, ai_draft, final_reply, "
+            "edit_distance, rating, reason, created_at",
+            (ticket_id, draft_id, decision, ai_draft, final_reply, edit_distance, rating, reason),
+        )
+        row = cur.fetchone()
+    assert row is not None  # INSERT ... RETURNING always yields the new row.
+    row["created_at"] = _iso(row["created_at"])
+    conn.commit()
+    return row
+
+
+def get_feedback(conn: Connection, ticket_id: int) -> list[dict[str, Any]]:
+    """Return a ticket's feedback rows in insertion order (SPEC §4.9)."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "SELECT id, ticket_id, draft_id, decision, ai_draft, final_reply, "
+            "edit_distance, rating, reason, created_at "
+            "FROM feedback WHERE ticket_id = %s ORDER BY id",
+            (ticket_id,),
+        )
+        rows = cur.fetchall()
+    for row in rows:
+        row["created_at"] = _iso(row["created_at"])
+    return rows

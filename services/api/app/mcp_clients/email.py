@@ -20,6 +20,7 @@ from fastapi import Depends, FastAPI, Request
 
 from app.config import Settings, get_settings
 from app.mcp_clients.base import MCPClient, MCPToolError, _parse_tool_result
+from app.schemas.feedback import FeedbackRecord
 
 # `_parse_tool_result` is re-exported for the wrapper's unit tests, which exercise
 # the shared parser directly against the email error type.
@@ -160,6 +161,29 @@ class EmailMCPClient(MCPClient):
             "get_audit_trail", {"ticket_id": ticket_id}, retry_on_disconnect=True
         )
         return cast("list[dict[str, Any]]", payload)
+
+    async def record_feedback(self, ticket_id: int, record: FeedbackRecord) -> dict[str, Any]:
+        """Persist one rep-decision feedback row for a ticket (SPEC §4.9).
+
+        The api's write path into the feedback table: the send/reject routes record the
+        rep's disposition — approved-as-is / edited (with the AI-vs-final diff) / rejected,
+        plus the optional rating and reason — here. A write: `retry_on_disconnect` is left
+        off so a dropped connection surfaces rather than risking a duplicate feedback row
+        on a reconnect-retry.
+        """
+        payload = await self.call_tool(
+            "record_feedback",
+            {
+                "ticket_id": ticket_id,
+                "decision": record.decision.value,
+                "ai_draft": record.ai_draft,
+                "final_reply": record.final_reply,
+                "edit_distance": record.edit_distance,
+                "rating": record.rating,
+                "reason": record.reason,
+            },
+        )
+        return cast("dict[str, Any]", payload)
 
 
 def email_client_for_app(app: FastAPI, settings: Settings) -> EmailMCPClient:
