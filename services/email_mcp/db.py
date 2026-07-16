@@ -389,3 +389,61 @@ def get_feedback(conn: Connection, ticket_id: int) -> list[dict[str, Any]]:
     for row in rows:
         row["created_at"] = _iso(row["created_at"])
     return rows
+
+
+# --------------------------------------------------------------------------- #
+# Training-corpus tools
+# --------------------------------------------------------------------------- #
+def record_corpus(
+    conn: Connection,
+    *,
+    ticket_id: int,
+    record_type: str,
+    payload: dict[str, Any],
+) -> dict[str, Any]:
+    """Append one de-identified training-corpus record and return it (SPEC §4.9a).
+
+    The `training_corpus` table is append-only: each resolved case contributes an SFT
+    record (`record_type = "sft"`) and, when the rep edited the draft, a preference pair
+    (`"preference"`). `payload` is the already-PII-redacted record body, stored in the
+    JSONB `payload` column so either shape lives in one table. The rows feed the
+    `make export-training-data` JSONL export for future fine-tuning.
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "INSERT INTO training_corpus (ticket_id, record_type, payload) "
+            "VALUES (%s, %s, %s) "
+            "RETURNING id, ticket_id, record_type, payload, created_at",
+            (ticket_id, record_type, Jsonb(payload)),
+        )
+        row = cur.fetchone()
+    assert row is not None  # INSERT ... RETURNING always yields the new row.
+    row["created_at"] = _iso(row["created_at"])
+    conn.commit()
+    return row
+
+
+def get_corpus(conn: Connection, ticket_id: int) -> list[dict[str, Any]]:
+    """Return a ticket's training-corpus records in insertion order (SPEC §4.9a)."""
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "SELECT id, ticket_id, record_type, payload, created_at "
+            "FROM training_corpus WHERE ticket_id = %s ORDER BY id",
+            (ticket_id,),
+        )
+        rows = cur.fetchall()
+    for row in rows:
+        row["created_at"] = _iso(row["created_at"])
+    return rows
+
+
+def export_corpus(conn: Connection) -> list[dict[str, Any]]:
+    """Return the whole append-only corpus in insertion order for the JSONL export.
+
+    Reads every ticket's records, ordered as they were written, so the exported dataset
+    is a stable stream a downstream fine-tune can consume (SPEC §4.9a). Only the fields
+    the export renders — `record_type` and `payload` — are selected.
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute("SELECT record_type, payload FROM training_corpus ORDER BY id")
+        return cur.fetchall()

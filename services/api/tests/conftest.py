@@ -84,6 +84,10 @@ class FakeEmailClient:
         # row, in the order they were written, so a route test can assert the
         # disposition the send/reject action captured (plan Task 25 / todo Task 27).
         self.feedback: list[dict[str, Any]] = []
+        # The in-memory stand-in for the `training_corpus` table: one dict per
+        # de-identified SFT/preference record, in the order they were written, so a
+        # route test can assert the corpus the send action captured (todo Task 28).
+        self.corpus: list[dict[str, Any]] = []
 
     async def create_ticket(
         self, message: str, attachments: list[str] | None = None
@@ -224,6 +228,18 @@ class FakeEmailClient:
         self.calls.append(("record_feedback", ticket_id, record.decision))
         row = {"ticket_id": ticket_id, **record.model_dump(mode="json")}
         self.feedback.append(row)
+        return row
+
+    async def record_corpus(self, ticket_id: int, record: Any) -> dict[str, Any]:
+        """Record one de-identified corpus record, matching the real client's signature.
+
+        Appends to `calls` (so a test can assert the api emitted corpus) and to the
+        `corpus` ledger as the flattened row email_mcp would store, so a route test can
+        read back the captured SFT/preference records (todo Task 28).
+        """
+        self.calls.append(("record_corpus", ticket_id, record.record_type))
+        row = {"ticket_id": ticket_id, **record.model_dump(mode="json")}
+        self.corpus.append(row)
         return row
 
 

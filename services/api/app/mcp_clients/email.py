@@ -20,6 +20,7 @@ from fastapi import Depends, FastAPI, Request
 
 from app.config import Settings, get_settings
 from app.mcp_clients.base import MCPClient, MCPToolError, _parse_tool_result
+from app.schemas.corpus import CorpusRecord
 from app.schemas.feedback import FeedbackRecord
 
 # `_parse_tool_result` is re-exported for the wrapper's unit tests, which exercise
@@ -184,6 +185,25 @@ class EmailMCPClient(MCPClient):
             },
         )
         return cast("dict[str, Any]", payload)
+
+    async def record_corpus(self, ticket_id: int, record: CorpusRecord) -> dict[str, Any]:
+        """Persist one de-identified training-corpus record for a ticket (SPEC §4.9a).
+
+        The api's write path into the append-only `training_corpus` table: the send route
+        records each SFT record (and a preference pair when the draft was edited) here.
+        The record is already PII-redacted by the builder. A write: `retry_on_disconnect`
+        is left off so a dropped connection surfaces rather than risking a duplicate
+        corpus row on a reconnect-retry.
+        """
+        result = await self.call_tool(
+            "record_corpus",
+            {
+                "ticket_id": ticket_id,
+                "record_type": record.record_type.value,
+                "payload": record.payload,
+            },
+        )
+        return cast("dict[str, Any]", result)
 
 
 def email_client_for_app(app: FastAPI, settings: Settings) -> EmailMCPClient:

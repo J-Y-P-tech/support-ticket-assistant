@@ -573,3 +573,97 @@ async def test_reject_records_rejected_feedback(
     assert row["edit_distance"] is None
     assert row["rating"] == 2
     assert row["reason"] == "needs a second source"
+
+
+# --- Training-corpus capture on send (todo Task 28) --------------------------------
+#
+# SPEC §4.9a captures a fine-tuning-ready dataset from day one: every resolved case
+# yields one de-identified SFT record, plus a preference pair when the rep edited the
+# draft. The send route owns the write — it resumes the graph through `finalize`, so
+# the finished state carries the grounding input and the approved reply the corpus
+# records are built from. A rejection produces no approved reply, so it captures none.
+
+
+async def test_approve_then_send_captures_one_sft_corpus_record(
+    build_paused_workflow: Any,
+    rep_client: Any,
+    email_client: FakeEmailClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """An approved-as-is send captures exactly one SFT corpus record (SPEC §4.9a).
+
+    The rep approved the draft unchanged, so the corpus gains a single SFT record whose
+    output is the approved reply and no preference pair.
+    """
+    email_client.register_ticket(7, "TKT-0007", status="Drafted")
+    graph = await build_paused_workflow(ticket_id=7)
+
+    async with rep_client(graph) as ac:
+        await ac.post("/rep/tickets/7/approve", headers=auth_headers)
+        sent = await ac.post(
+            "/rep/tickets/7/send",
+            json={"rep_id": "rep-1", "rating": 5},
+            headers=auth_headers,
+        )
+
+    assert sent.status_code == 200
+    assert len(email_client.corpus) == 1
+    record = email_client.corpus[0]
+    assert record["ticket_id"] == 7
+    assert record["record_type"] == "sft"
+    assert record["payload"]["output"] == HAPPY_DRAFT_BODY
+    assert record["payload"]["metadata"]["rating"] == 5
+
+
+async def test_edit_then_send_captures_sft_and_preference_corpus_records(
+    build_paused_workflow: Any,
+    rep_client: Any,
+    email_client: FakeEmailClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """An edited send captures an SFT record and a preference pair (SPEC §4.9a).
+
+    The rep rewrote the draft before sending, so the corpus gains the SFT record (its
+    output the edited reply) and a preference pair keeping the edited reply as `chosen`
+    and the AI's original draft as `rejected`.
+    """
+    edited = "Please reset your password from the login screen and call us if it fails."
+    email_client.register_ticket(7, "TKT-0007", status="Drafted")
+    graph = await build_paused_workflow(ticket_id=7)
+
+    async with rep_client(graph) as ac:
+        await ac.post("/rep/tickets/7/edit", json={"reply": edited}, headers=auth_headers)
+        sent = await ac.post("/rep/tickets/7/send", json={"rep_id": "rep-9"}, headers=auth_headers)
+
+    assert sent.status_code == 200
+    assert [r["record_type"] for r in email_client.corpus] == ["sft", "preference"]
+    sft, pref = email_client.corpus
+    assert sft["payload"]["output"] == edited
+    assert pref["payload"]["chosen"] == edited
+    assert pref["payload"]["rejected"] == HAPPY_DRAFT_BODY
+
+
+async def test_reject_captures_no_corpus_record(
+    build_paused_workflow: Any,
+    rep_client: Any,
+    email_client: FakeEmailClient,
+    auth_headers: dict[str, str],
+) -> None:
+    """Rejecting a draft captures no corpus record — there is no approved reply.
+
+    SPEC §4.9a ties the SFT output to the human-approved reply; a rejection produces
+    none, so no SFT record or preference pair is written (the rejection still lands in
+    the feedback table as a negative signal).
+    """
+    email_client.register_ticket(7, "TKT-0007", status="Drafted")
+    graph = await build_paused_workflow(ticket_id=7)
+
+    async with rep_client(graph) as ac:
+        rejected = await ac.post(
+            "/rep/tickets/7/reject",
+            json={"rep_id": "rep-3", "reason": "needs a second source"},
+            headers=auth_headers,
+        )
+
+    assert rejected.status_code == 200
+    assert email_client.corpus == []

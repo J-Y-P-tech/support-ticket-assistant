@@ -55,7 +55,7 @@ Order is dependency-correct; do not start a task before its dependencies are che
 
 ## Phase 9 — Feedback, training corpus, dynamic prompting
 - [x] **27.** feedback capture (approved/edited-diff/rejected + rating) — *deps: 18,26*
-- [ ] **28.** training corpus (SFT + preference pairs) + export JSONL + PII test — *deps: 27*
+- [x] **28.** training corpus (SFT + preference pairs) + export JSONL + PII test — *deps: 27*
 - [ ] **29.** dynamic prompting: Langfuse prompts + deterministic few-shot — *deps: 13,27*
 
 ## Phase 10 — Observability

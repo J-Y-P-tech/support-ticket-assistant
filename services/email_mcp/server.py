@@ -155,6 +155,20 @@ def get_feedback(ticket_id: int) -> list[dict[str, Any]]:
         return db.get_feedback(conn, ticket_id)
 
 
+@mcp.tool()
+def record_corpus(ticket_id: int, record_type: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Append one de-identified training-corpus record and return it (SPEC §4.9a)."""
+    with db.connect_from_env() as conn:
+        return db.record_corpus(conn, ticket_id=ticket_id, record_type=record_type, payload=payload)
+
+
+@mcp.tool()
+def get_corpus(ticket_id: int) -> list[dict[str, Any]]:
+    """Return a ticket's training-corpus records in insertion order (SPEC §4.9a)."""
+    with db.connect_from_env() as conn:
+        return db.get_corpus(conn, ticket_id)
+
+
 def main() -> None:
     """Run the MCP server over streamable-HTTP (SPEC §6: api↔MCP over HTTP)."""
     mcp.run(transport="streamable-http")

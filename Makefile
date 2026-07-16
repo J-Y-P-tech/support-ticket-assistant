@@ -44,8 +44,11 @@ migrate: ## Apply DB migrations via email_mcp (reads POSTGRES_* from the env/.en
 seed: ## Load mock-KB answers + sample tickets
 	@echo "seed: implemented in Tasks 3/7 (sample tickets + mock_kb data)."
 
-export-training-data: ## Export de-identified SFT + preference JSONL
-	@echo "export-training-data: implemented in Task 26 (training corpus export)."
+export-training-data: ## Export de-identified SFT + preference JSONL (to stdout)
+	# Load .env like `migrate` does: export_training_data.py reads POSTGRES_* from
+	# os.environ, and a plain host process does not auto-read .env. Output is JSONL on
+	# stdout — redirect it to a file, e.g. `make export-training-data > corpus.jsonl`.
+	set -a; [ -f .env ] && . ./.env; set +a; uv run python services/email_mcp/export_training_data.py
 
 security: ## Run security scans (bandit, pip-audit, gitleaks, image scan)
 	@echo "security: implemented in Task 30 (bandit + pip-audit + gitleaks + trivy)."

@@ -26,6 +26,7 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import StateSnapshot
 
 from app.config import Settings, get_settings
+from app.graph.corpus import record_corpus
 from app.graph.feedback import record_feedback
 from app.graph.runtime import get_workflow
 from app.graph.workflow import thread_config
@@ -203,6 +204,7 @@ async def rep_send(
     payload: RepSendRequest,
     workflow: CompiledStateGraph = Depends(get_workflow),
     email: EmailMCPClient = Depends(get_email_client),
+    settings: Settings = Depends(get_settings),
 ) -> RepActionResult:
     """Send the approved/edited reply: resume through `finalize`, then persist it.
 
@@ -229,6 +231,12 @@ async def rep_send(
     # carries the AI draft and the sent reply the record is built from.
     await record_feedback(
         email, ticket_id=ticket_id, state=final, rating=payload.rating, reason=payload.reason
+    )
+    # Capture the de-identified training corpus (SPEC §4.9a): one SFT record for the
+    # approved reply, plus a preference pair when the rep edited the draft. Built from
+    # the same finished state, PII-redacted, and attributed to the host model tag.
+    await record_corpus(
+        email, ticket_id=ticket_id, state=final, model=settings.llm_model, rating=payload.rating
     )
     return RepActionResult(ticket_id=ticket_id, status=TicketStatus.RESOLVED, reply=reply)
 
