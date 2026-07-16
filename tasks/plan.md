@@ -255,7 +255,7 @@ nodes. **Acceptance criteria:** a known injection string is flagged/neutralized 
 #### Task 15: output guards — forbidden promises / PII leak / tone
 **Description:** Block financial/legal commitments (refund promises, guarantees), PII leakage, and
 tone violations in the draft. **Acceptance criteria:** a draft containing a forbidden promise or PII
-is blocked/flagged (eval-style test). **Verification:** unit tests + feeds Task 29 red-team.
+is blocked/flagged (eval-style test). **Verification:** unit tests + feeds Task 30 red-team.
 **Dependencies:** Task 12. **Scope:** M.
 
 ### Phase 6 — Workflow assembly + human-in-the-loop
@@ -380,9 +380,19 @@ fallback; deterministic dynamic few-shot selector picks best recent approved rep
 stubbed); few-shot selection is deterministic and unit-tested (SPEC §4.10). **Verification:** unit
 tests with Langfuse stubbed. **Dependencies:** Tasks 12, 25. **Scope:** M.
 
+#### Task 28: live dynamic few-shot lookup — wire into drafting
+**Description:** The follow-up to Task 27, which built the deterministic selector + Langfuse-fallback
+resolver but not the live retrieval. Add an email_mcp query returning recent **approved** replies for
+a category (DB query + a category index migration + MCP tool + api client method); the workflow
+`draft_node` selects the best of them with the Task 27 selector and injects them into the drafting
+prompt, so a running ticket gets real few-shot examples end-to-end. **Acceptance criteria:** a
+resolved ticket's draft is built with category-matched approved examples end-to-end; selection stays
+deterministic; no examples → the prompt is unchanged (SPEC §4.10). **Verification:** unit + workflow
+test (FakeLLM). **Dependencies:** Tasks 26, 27 (+ workflow assembly). **Scope:** M.
+
 ### Phase 10 — Observability (Langfuse)
 
-#### Task 28: Langfuse service + one PII-redacted trace per ticket
+#### Task 29: Langfuse service + one PII-redacted trace per ticket
 **Description:** Add self-hosted `langfuse` Docker service (own datastore); LangChain/LangGraph
 callback emits one trace/ticket (nodes, model calls, tokens, latency, retrieval, guardrail
 outcomes), PII-redacted; store trace id on the ticket; attach rep feedback + eval results as scores.
@@ -396,19 +406,19 @@ config valid. **Dependencies:** Tasks 16, 23, 25. **Scope:** M/L.
 
 ### Phase 11 — Evals + CI
 
-#### Task 29: eval + red-team suites + runner
+#### Task 30: eval + red-team suites + runner
 **Description:** `evals/` golden set (expected category/urgency) + groundedness assertions +
 red-team cases (prompt injection, PII-leak, forbidden-promise) that MUST be blocked; `make eval`
 runner; eval-gated prompt-promotion hook (Task 27). **Acceptance criteria:** golden cases pass;
 every red-team case is blocked/flagged; groundedness threshold enforced (SPEC §10, §12.3).
 **Verification:** `make eval`. **Dependencies:** Tasks 14, 15, 27. **Scope:** M/L.
 
-#### Task 30: CI pipeline
+#### Task 31: CI pipeline
 **Description:** `.github/workflows/ci.yml`: lint/format/type → unit+contract+workflow (FakeLLM,
 no model) → AI eval gate → security scan (bandit/pip-audit/gitleaks/trivy) → build images →
 optional gated deploy. **Acceptance criteria:** pipeline mirrors SPEC §12 stage order; eval/security
 gates fail the build on regression. (User owns git/GitHub; I only write the workflow file.)
-**Verification:** the user runs it in CI. **Dependencies:** Task 29. **Scope:** M.
+**Verification:** the user runs it in CI. **Dependencies:** Task 30. **Scope:** M.
 
 > **Checkpoint D — Complete:** all §13 "Always" invariants covered; eval + security gates green;
 > every SPEC §4 acceptance criterion has a passing test. Final review.

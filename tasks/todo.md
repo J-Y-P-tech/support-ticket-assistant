@@ -56,14 +56,15 @@ Order is dependency-correct; do not start a task before its dependencies are che
 ## Phase 9 — Feedback, training corpus, dynamic prompting
 - [x] **27.** feedback capture (approved/edited-diff/rejected + rating) — *deps: 18,26*
 - [x] **28.** training corpus (SFT + preference pairs) + export JSONL + PII test — *deps: 27*
-- [ ] **29.** dynamic prompting: Langfuse prompts + deterministic few-shot — *deps: 13,27*
+- [x] **29.** dynamic prompting: Langfuse prompts + deterministic few-shot — *deps: 13,27*
+- [ ] **30.** live few-shot lookup: email_mcp query approved-replies-by-category (+ index migration + api client) → wire `draft_node` to select + inject — *deps: 17,28,29*
 
 ## Phase 10 — Observability
-- [ ] **30.** Langfuse service + one PII-redacted trace per ticket + scores — *deps: 17,24,27*
+- [ ] **31.** Langfuse service + one PII-redacted trace per ticket + scores — *deps: 17,24,27*
 
 ## Phase 11 — Evals + CI
-- [ ] **31.** eval + red-team suites + runner + eval-gated promotion — *deps: 15,16,29*
-- [ ] **32.** CI pipeline (.github/workflows/ci.yml) — *deps: 31*
+- [ ] **32.** eval + red-team suites + runner + eval-gated promotion — *deps: 15,16,29*
+- [ ] **33.** CI pipeline (.github/workflows/ci.yml) — *deps: 32*
 - [ ] **Checkpoint D** — complete: all §13 invariants covered, eval + security gates green
 
 ---

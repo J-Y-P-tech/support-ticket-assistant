@@ -37,9 +37,12 @@ JSON:"""
 
 # Grounded drafting (plan Task 12 / todo Task 13). `{message}` is the customer's
 # ticket; `{sources}` is the rendered block of authoritative KB sources the draft
-# node hands in. The instruction to answer *only* from the sources is the prompt's
-# half of the grounding contract; the node enforces the other half by feeding in
-# authoritative sources alone and citing exactly them (SPEC §4.5).
+# node hands in. `{examples}` is the dynamic few-shot block (plan Task 27 / todo Task
+# 29): the best recent approved replies for the ticket's category, rendered by
+# `app.prompts.fewshot`, or the empty string when there are none — so a text-only,
+# no-example draft reads exactly as before. The instruction to answer *only* from the
+# sources is the prompt's half of the grounding contract; the node enforces the other
+# half by feeding in authoritative sources alone and citing exactly them (SPEC §4.5).
 _DRAFT = """\
 You are a support-desk assistant for a financial institution. Write a reply to the \
 customer message below using ONLY the information in the provided sources.
@@ -52,7 +55,7 @@ assume anything that is not there.
 - If the sources do not fully answer the question, address what they do support and \
 say a representative will follow up on the rest.
 
-Customer message:
+{examples}Customer message:
 {message}
 
 Sources:
