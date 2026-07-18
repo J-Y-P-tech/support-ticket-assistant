@@ -32,3 +32,15 @@ def test_migrations_create_reference_code_sequence(conn: Connection) -> None:
             "WHERE sequence_name = 'ticket_reference_seq'"
         )
         assert cur.fetchone() is not None
+
+
+def test_feedback_category_index_exists(conn: Connection) -> None:
+    """The live few-shot lookup filters feedback by category, so that column is indexed.
+
+    `approved_replies_by_category` reads approved replies for one category at a time; the
+    index (added in migration 0003) keeps that per-category filter from scanning the whole
+    feedback table as the corpus grows (todo Task 30).
+    """
+    with conn.cursor() as cur:
+        cur.execute("SELECT 1 FROM pg_indexes WHERE indexname = 'feedback_category_idx'")
+        assert cur.fetchone() is not None

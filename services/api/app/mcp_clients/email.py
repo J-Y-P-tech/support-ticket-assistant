@@ -182,9 +182,26 @@ class EmailMCPClient(MCPClient):
                 "edit_distance": record.edit_distance,
                 "rating": record.rating,
                 "reason": record.reason,
+                "category": record.category.value if record.category is not None else None,
             },
         )
         return cast("dict[str, Any]", payload)
+
+    async def approved_replies_by_category(self, category: str, limit: int) -> list[dict[str, Any]]:
+        """Return recent approved replies for a category, newest first (SPEC §4.10).
+
+        The drafting node's live dynamic few-shot lookup: fetches the candidate pool of
+        recent approved replies for the ticket's category — each row the customer message,
+        the approved reply, the rep rating, and a recency id — for the deterministic
+        selector to rank. An idempotent read: `retry_on_disconnect` is on, so a dropped
+        connection can be safely re-run.
+        """
+        payload = await self.call_tool(
+            "approved_replies_by_category",
+            {"category": category, "limit": limit},
+            retry_on_disconnect=True,
+        )
+        return cast("list[dict[str, Any]]", payload)
 
     async def record_corpus(self, ticket_id: int, record: CorpusRecord) -> dict[str, Any]:
         """Persist one de-identified training-corpus record for a ticket (SPEC §4.9a).

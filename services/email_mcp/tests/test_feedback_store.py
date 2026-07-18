@@ -62,6 +62,40 @@ def test_record_feedback_rejected_allows_null_final_and_distance(conn: Connectio
     assert entry["reason"] is None
 
 
+def test_record_feedback_stores_the_triage_category(conn: Connection) -> None:
+    """An approved feedback row keeps the ticket's triage category for the few-shot lookup.
+
+    The category tags each approved reply so `approved_replies_by_category` can select the
+    best recent examples for a drafting ticket's category (SPEC §4.10 / todo Task 30).
+    """
+    ticket = db.create_ticket(conn, message="please help")
+
+    row = db.record_feedback(
+        conn,
+        ticket_id=ticket["id"],
+        decision="approved_as_is",
+        ai_draft="reset your password",
+        final_reply="reset your password",
+        category="account_access",
+    )
+
+    assert row["category"] == "account_access"
+
+
+def test_record_feedback_category_defaults_to_null(conn: Connection) -> None:
+    """A feedback row recorded without a category stores NULL (category is optional)."""
+    ticket = db.create_ticket(conn, message="please help")
+
+    row = db.record_feedback(
+        conn,
+        ticket_id=ticket["id"],
+        decision="rejected",
+        ai_draft="thrown away",
+    )
+
+    assert row["category"] is None
+
+
 def test_get_feedback_unknown_ticket_is_empty(conn: Connection) -> None:
     """A ticket with no feedback rows reads back as a neutral empty list."""
     assert db.get_feedback(conn, 999999) == []

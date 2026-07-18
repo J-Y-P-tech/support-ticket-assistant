@@ -147,13 +147,16 @@ def _build(llm: FakeLLM, kb_client: FakeKBClient, test_settings: Any) -> Any:
 
     Imports `build_workflow` lazily so this module still collects while the
     implementation is unwritten (RED), and passes a fresh `MemorySaver` as the
-    checkpointer the way production passes the Postgres saver.
+    checkpointer the way production passes the Postgres saver. The few-shot email lookup
+    is a no-example fake, so these tests exercise the pipeline as before; the injection
+    path itself is covered by the `_build_with_email` tests below.
     """
     from app.graph.workflow import build_workflow
 
     return build_workflow(
         llm=llm,
         kb_client=kb_client,
+        email_client=_FewShotEmail(),
         settings=test_settings,
         checkpointer=MemorySaver(),
     )
@@ -429,3 +432,95 @@ async def test_attachment_ticket_digitizes_extracts_and_fuses(test_settings: Any
     assert "cheque" in facts
     assert "CHK-4471" in facts
     assert _TRANSCRIPTION in facts
+
+
+# --- Live dynamic few-shot injection (plan Task 28 / todo Task 30) ------------
+#
+# At draft time the node fetches the best recent approved replies for the ticket's
+# triage category through the email client, selects them with the deterministic Task 29
+# selector, and injects them into the drafting prompt (SPEC §4.10). These prove the
+# wiring end-to-end on the FakeLLM: the example reaches the drafting prompt, the lookup
+# is scoped to the triage category, and an empty lookup leaves the prompt unchanged.
+
+# The rendered few-shot block's header (see `app.prompts.fewshot.render_examples`); its
+# presence in the drafting prompt marks that examples were injected.
+_FEWSHOT_HEADER = "approved replies to similar past tickets"
+
+
+class _FewShotEmail:
+    """Email stand-in exposing only the few-shot lookup the draft node calls.
+
+    Returns the configured approved-reply rows for any category and records the
+    `(category, limit)` each lookup asked for, so a test can assert the draft node
+    queried email_mcp with the ticket's triage category.
+    """
+
+    def __init__(self, rows: list[dict[str, Any]] | None = None) -> None:
+        """Store the rows the lookup returns and start an empty query log."""
+        self.rows = rows or []
+        self.queries: list[tuple[str, int]] = []
+
+    async def approved_replies_by_category(self, category: str, limit: int) -> list[dict[str, Any]]:
+        """Record the `(category, limit)` lookup and return the configured rows."""
+        self.queries.append((category, limit))
+        return list(self.rows)
+
+
+def _build_with_email(
+    llm: FakeLLM, kb_client: FakeKBClient, test_settings: Any, email_client: _FewShotEmail
+) -> Any:
+    """Compile the workflow wiring the few-shot email lookup, on an in-memory checkpointer.
+
+    Like `_build`, but passes the `email_client` the draft node queries for the ticket's
+    category's approved replies; imported lazily so the module still collects during RED.
+    """
+    from app.graph.workflow import build_workflow
+
+    return build_workflow(
+        llm=llm,
+        kb_client=kb_client,
+        settings=test_settings,
+        checkpointer=MemorySaver(),
+        email_client=email_client,
+    )
+
+
+async def test_draft_injects_category_matched_approved_examples(test_settings: Any) -> None:
+    """A ticket drafts with its triage category's approved replies injected as few-shot.
+
+    The lookup returns an approved reply for `account_access` (the category the happy-path
+    triage assigns); the draft node selects and injects it, so the drafting prompt the
+    model receives carries the example's approved reply. The lookup is scoped to the
+    ticket's triage category (SPEC §4.10). The draft is the fourth model call.
+    """
+    example_reply = "Here is exactly how a past ticket was answered and approved by a rep."
+    email = _FewShotEmail(
+        rows=[{"example_id": 9, "message": "old lockout", "reply": example_reply, "rating": 5}]
+    )
+    llm = FakeLLM(_HAPPY_PATH_SCRIPT)
+    graph = _build_with_email(llm, _confident_kb(), test_settings, email)
+
+    await graph.ainvoke(_initial_state(), _thread())
+
+    draft_prompt = llm.calls[3]["prompt"]
+    assert example_reply in draft_prompt
+    assert _FEWSHOT_HEADER in draft_prompt
+    assert email.queries and email.queries[0][0] == "account_access"
+
+
+async def test_draft_without_examples_leaves_prompt_unchanged(test_settings: Any) -> None:
+    """With no approved replies for the category, the drafting prompt gains no example block.
+
+    The lookup returns nothing, so the rendered few-shot block is empty and the drafting
+    prompt is exactly the no-few-shot prompt — no dangling examples header (SPEC §4.10).
+    """
+    email = _FewShotEmail(rows=[])
+    llm = FakeLLM(_HAPPY_PATH_SCRIPT)
+    graph = _build_with_email(llm, _confident_kb(), test_settings, email)
+
+    await graph.ainvoke(_initial_state(), _thread())
+
+    draft_prompt = llm.calls[3]["prompt"]
+    assert _FEWSHOT_HEADER not in draft_prompt
+    # The lookup still ran, scoped to the triage category — it simply found nothing.
+    assert email.queries and email.queries[0][0] == "account_access"

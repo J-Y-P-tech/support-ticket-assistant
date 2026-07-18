@@ -111,6 +111,39 @@ def test_rejected_record_has_no_final_reply_or_distance() -> None:
     assert record.reason == "off-topic; needs research"
 
 
+def test_record_captures_the_triage_category() -> None:
+    """A finished run's triage category rides onto the feedback record (todo Task 30).
+
+    The category tags the approved reply so the live few-shot lookup can later select it
+    for a same-category drafting ticket (SPEC §4.10). It is read from the `triage` result
+    `finalize` left in state.
+    """
+    from app.schemas.enums import Category, Sentiment, Urgency
+    from app.schemas.triage import TriageResult
+
+    state = _finished_state(
+        decision=FeedbackDecision.APPROVED_AS_IS, draft_body="reset it", final_reply="reset it"
+    )
+    state["triage"] = TriageResult(
+        category=Category.ACCOUNT_ACCESS, urgency=Urgency.NORMAL, sentiment=Sentiment.NEUTRAL
+    )
+
+    record = build_feedback_record(state)
+
+    assert record is not None
+    assert record.category is Category.ACCOUNT_ACCESS
+
+
+def test_record_without_triage_leaves_category_none() -> None:
+    """A finished run missing its triage result records no category (stays None)."""
+    record = build_feedback_record(
+        _finished_state(decision=FeedbackDecision.EDITED, draft_body="a", final_reply="b")
+    )
+
+    assert record is not None
+    assert record.category is None
+
+
 def test_no_draft_yields_no_feedback_record() -> None:
     """A case handed to a human with no draft has no AI draft to rate — no record.
 

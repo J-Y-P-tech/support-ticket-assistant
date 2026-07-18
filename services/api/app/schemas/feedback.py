@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, Field
 
-from app.schemas.enums import FeedbackDecision
+from app.schemas.enums import Category, FeedbackDecision
 
 
 class FeedbackRecord(BaseModel):
@@ -18,6 +18,9 @@ class FeedbackRecord(BaseModel):
 
     `final_reply` and `edit_distance` are absent for a rejected draft; for an
     approved-as-is draft the edit distance is zero and the final matches the draft.
+    `category` is the ticket's triage category, tagged onto the row so an approved reply
+    can be selected as a same-category few-shot example later (SPEC §4.10); it is
+    optional — a run that never triaged (a blocked injection) carries none.
     """
 
     decision: FeedbackDecision
@@ -26,3 +29,4 @@ class FeedbackRecord(BaseModel):
     edit_distance: int | None = Field(default=None, ge=0)
     rating: int | None = None
     reason: str | None = None
+    category: Category | None = None

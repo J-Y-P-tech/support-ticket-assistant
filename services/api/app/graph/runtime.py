@@ -27,6 +27,7 @@ from langgraph.graph.state import CompiledStateGraph
 from app.config import Settings, get_settings
 from app.graph.workflow import build_workflow
 from app.llm.ollama import OllamaLLM
+from app.mcp_clients.email import email_client_for_app
 from app.mcp_clients.kb import KBMCPClient
 
 
@@ -79,8 +80,13 @@ async def _build_app_workflow(app: FastAPI, settings: Settings) -> CompiledState
     stack.push_async_callback(llm.aclose)
 
     kb_client = _shared_kb_client(app, settings)
+    email_client = email_client_for_app(app, settings)
     return build_workflow(
-        llm=llm, kb_client=kb_client, settings=settings, checkpointer=checkpointer
+        llm=llm,
+        kb_client=kb_client,
+        email_client=email_client,
+        settings=settings,
+        checkpointer=checkpointer,
     )
 
 

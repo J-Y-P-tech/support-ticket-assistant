@@ -49,6 +49,7 @@ from app.guardrails.injection import screen_input
 from app.guardrails.output import screen_output
 from app.llm.base import LLM
 from app.llm.thinking import contains_thinking_trace
+from app.prompts.fewshot import FewShotExample, select_examples
 from app.schemas.enums import FeedbackDecision, TicketStatus
 
 
@@ -77,21 +78,37 @@ class KBSearcher(Protocol):
         ...
 
 
+class ApprovedRepliesSource(Protocol):
+    """The slice of the email client the draft node needs: the few-shot lookup.
+
+    Typed structurally (not against the concrete `EmailMCPClient`) so the workflow
+    tests pass a lightweight fake without standing up email_mcp. Returns the candidate
+    pool of recent approved replies for a category (SPEC §4.10).
+    """
+
+    async def approved_replies_by_category(self, category: str, limit: int) -> list[dict[str, Any]]:
+        """Return recent approved replies for `category`, newest first."""
+        ...
+
+
 def build_workflow(
     *,
     llm: LLM,
     kb_client: KBSearcher,
+    email_client: ApprovedRepliesSource,
     settings: Settings,
     checkpointer: BaseCheckpointSaver,
 ) -> CompiledStateGraph:
     """Assemble and compile the support-ticket workflow with the human interrupt.
 
     Wires the SPEC §5 pipeline into a `StateGraph`, closing over `llm`, `kb_client`,
-    and `settings` (the per-node retry/threshold knobs come from config, not code), and
-    compiles it with `checkpointer` and `interrupt_before=["human_review"]`. The
-    returned graph runs the automated steps and then **pauses before the rep gate**;
-    resuming it — after a decision is written to state — runs `finalize`, which is the
-    only node that can resolve the case and refuses to do so without that decision.
+    `email_client`, and `settings` (the per-node retry/threshold knobs come from config,
+    not code), and compiles it with `checkpointer` and `interrupt_before=["human_review"]`.
+    `email_client` is the few-shot source the draft node queries for the ticket's
+    category's approved replies (SPEC §4.10). The returned graph runs the automated steps
+    and then **pauses before the rep gate**; resuming it — after a decision is written to
+    state — runs `finalize`, which is the only node that can resolve the case and refuses
+    to do so without that decision.
     """
 
     async def screen_input_node(state: WorkflowState) -> dict[str, Any]:
@@ -190,14 +207,44 @@ def build_workflow(
             ],
         }
 
+    async def _fewshot_examples(state: WorkflowState) -> list[FewShotExample]:
+        """Fetch and select the drafting few-shot examples for the ticket's category.
+
+        Queries `email_client` for the recent approved replies in the ticket's triage
+        category, then ranks them with the deterministic Task 29 selector and keeps the
+        best `few_shot_limit` (SPEC §4.10). Returns an empty list when the ticket was
+        never triaged or when the category has no approved replies yet — the draft prompt
+        is then left exactly as it was before few-shot.
+        """
+        triage = state.get("triage")
+        limit = settings.few_shot_limit
+        if triage is None or limit <= 0:
+            return []
+        category = triage.category.value
+        rows = await email_client.approved_replies_by_category(category, limit)
+        candidates = [
+            FewShotExample(
+                category=category,
+                message=row["message"],
+                reply=row["reply"],
+                rating=row["rating"],
+                example_id=row["example_id"],
+            )
+            for row in rows
+        ]
+        return select_examples(candidates, category=category, limit=limit)
+
     async def draft_node(state: WorkflowState) -> dict[str, Any]:
         """Draft a grounded, cited reply; flag (never strip) a leaked reasoning trace.
 
-        Writes the draft and marks the case Drafted. If the reply carries a leaked
-        reasoning trace it is surfaced to the rep via a flag and `trace_leak`, with the
-        text left intact — the rep, not the pipeline, decides what to do (Task 10 note).
+        Injects the ticket category's best recent approved replies as dynamic few-shot
+        examples (SPEC §4.10), writes the draft, and marks the case Drafted. If the reply
+        carries a leaked reasoning trace it is surfaced to the rep via a flag and
+        `trace_leak`, with the text left intact — the rep, not the pipeline, decides what
+        to do (Task 10 note).
         """
-        drafted = await draft_reply(state["message"], state["kb_result"], llm)
+        examples = await _fewshot_examples(state)
+        drafted = await draft_reply(state["message"], state["kb_result"], llm, examples=examples)
         leaked = contains_thinking_trace(drafted.body)
         update: dict[str, Any] = {
             "draft": drafted,

@@ -350,6 +350,7 @@ def record_feedback(
     edit_distance: int | None = None,
     rating: int | None = None,
     reason: str | None = None,
+    category: str | None = None,
     draft_id: int | None = None,
 ) -> dict[str, Any]:
     """Persist one rep-decision feedback row and return it (SPEC §4.9).
@@ -357,23 +358,64 @@ def record_feedback(
     Records how a rep disposed of an AI draft — approved-as-is / edited (with the diff
     distance between the draft and the final reply) / rejected — plus the optional
     rating and reason. `final_reply`/`edit_distance` are absent for a rejection (no
-    reply was sent); `rating`/`reason` are optional throughout. The row feeds the
-    quality loop (§7.4) and the de-identified training corpus (§4.9a).
+    reply was sent); `rating`/`reason` are optional throughout. `category` tags the row
+    with the ticket's triage category so `approved_replies_by_category` can select an
+    approved reply as a same-category few-shot example (SPEC §4.10); it is optional and
+    stored NULL when absent. The row feeds the quality loop (§7.4) and the de-identified
+    training corpus (§4.9a).
     """
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             "INSERT INTO feedback "
-            "(ticket_id, draft_id, decision, ai_draft, final_reply, edit_distance, rating, reason) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) "
+            "(ticket_id, draft_id, decision, ai_draft, final_reply, edit_distance, "
+            "rating, reason, category) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s) "
             "RETURNING id, ticket_id, draft_id, decision, ai_draft, final_reply, "
-            "edit_distance, rating, reason, created_at",
-            (ticket_id, draft_id, decision, ai_draft, final_reply, edit_distance, rating, reason),
+            "edit_distance, rating, reason, category, created_at",
+            (
+                ticket_id,
+                draft_id,
+                decision,
+                ai_draft,
+                final_reply,
+                edit_distance,
+                rating,
+                reason,
+                category,
+            ),
         )
         row = cur.fetchone()
     assert row is not None  # INSERT ... RETURNING always yields the new row.
     row["created_at"] = _iso(row["created_at"])
     conn.commit()
     return row
+
+
+def approved_replies_by_category(
+    conn: Connection, *, category: str, limit: int
+) -> list[dict[str, Any]]:
+    """Return recent **approved** replies for a category, newest first (SPEC §4.10).
+
+    The candidate pool for the live dynamic few-shot lookup: for `category`, the most
+    recent feedback rows a rep actually sent — decision not `rejected` and carrying a
+    `final_reply` — joined to their ticket for the customer `message`. Each row is shaped
+    for the deterministic selector (todo Task 29): `message`, the approved `reply`, the
+    rep `rating`, and `example_id` (the feedback row id — a monotonic recency/stability
+    key, higher = newer). Ordered by that id descending and capped at `limit`, so the
+    pool is bounded even as the corpus grows. An empty result (no approved replies for
+    the category) is a plain empty list — the draft prompt is then left unchanged.
+    """
+    with conn.cursor(row_factory=dict_row) as cur:
+        cur.execute(
+            "SELECT f.id AS example_id, t.message AS message, "
+            "f.final_reply AS reply, f.rating AS rating "
+            "FROM feedback f JOIN tickets t ON t.id = f.ticket_id "
+            "WHERE f.category = %s AND f.decision <> 'rejected' "
+            "AND f.final_reply IS NOT NULL "
+            "ORDER BY f.id DESC LIMIT %s",
+            (category, limit),
+        )
+        return cur.fetchall()
 
 
 def get_feedback(conn: Connection, ticket_id: int) -> list[dict[str, Any]]:

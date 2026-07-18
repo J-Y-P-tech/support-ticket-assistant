@@ -29,6 +29,7 @@ _COMPLETE_ENV: dict[str, str] = {
     "GROUNDEDNESS_MIN": "0.6",
     "VALIDATE_MAX_ATTEMPTS": "2",
     "EXTRACT_MAX_ATTEMPTS": "2",
+    "FEW_SHOT_LIMIT": "3",
     "API_AUTH_TOKEN": "frontend-to-api-token",
     "DATABASE_URL": "postgresql://support:test@localhost:5432/support_tickets",
     "EMAIL_MCP_URL": "http://email_mcp:8000",
@@ -70,6 +71,7 @@ def test_loads_all_values_from_env(full_env: None) -> None:
     assert settings.groundedness_min == 0.6
     assert settings.validate_max_attempts == 2
     assert settings.extract_max_attempts == 2
+    assert settings.few_shot_limit == 3
 
 
 def test_secrets_are_secretstr(full_env: None) -> None:

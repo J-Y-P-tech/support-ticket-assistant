@@ -78,3 +78,31 @@ def test_feedback_requires_decision_and_draft() -> None:
     """The rep `decision` and the `ai_draft` it applies to are mandatory."""
     with pytest.raises(ValidationError):
         FeedbackRecord.model_validate({"reason": "no decision given"})
+
+
+def test_feedback_carries_the_optional_triage_category() -> None:
+    """A record may carry the ticket's triage category, round-tripping through JSON.
+
+    The category tags each approved reply so the live few-shot lookup can select the best
+    recent examples for a drafting ticket's category (SPEC §4.10 / todo Task 30).
+    """
+    from app.schemas.enums import Category
+
+    record = FeedbackRecord(
+        decision=FeedbackDecision.APPROVED_AS_IS,
+        ai_draft="reset it",
+        final_reply="reset it",
+        edit_distance=0,
+        category=Category.PAYMENTS_BILLING,
+    )
+
+    restored = FeedbackRecord.model_validate_json(record.model_dump_json())
+
+    assert restored.category is Category.PAYMENTS_BILLING
+
+
+def test_feedback_category_defaults_to_none() -> None:
+    """Category is optional: a record built without one leaves it None."""
+    record = FeedbackRecord(decision=FeedbackDecision.REJECTED, ai_draft="thrown away")
+
+    assert record.category is None

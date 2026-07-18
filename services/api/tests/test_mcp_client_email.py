@@ -237,3 +237,64 @@ async def test_reads_opt_into_retry_but_writes_do_not(
     assert seen["get_ticket"] is True
     assert seen["get_ticket_by_code"] is True
     assert seen["fetch_new_tickets"] is True
+
+
+async def test_approved_replies_by_category_returns_list_and_opts_into_retry(
+    wrapper: EmailMCPClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`approved_replies_by_category` forwards the category/limit and reads with retry.
+
+    The live few-shot lookup (todo Task 30) fetches candidate approved replies for the
+    ticket's category; it is an idempotent read, so — like the other lookups — it passes
+    `retry_on_disconnect=True` and returns the tool's row list unchanged.
+    """
+    rows = [{"example_id": 5, "message": "locked out", "reply": "reset it here", "rating": 4}]
+    seen: dict[str, Any] = {}
+
+    async def fake_call(
+        tool: str, arguments: dict[str, Any], *, retry_on_disconnect: bool = False
+    ) -> Any:
+        seen["tool"] = tool
+        seen["arguments"] = arguments
+        seen["retry"] = retry_on_disconnect
+        return rows
+
+    monkeypatch.setattr(wrapper, "call_tool", fake_call)
+
+    result = await wrapper.approved_replies_by_category("account_access", limit=3)
+
+    assert result == rows
+    assert seen["tool"] == "approved_replies_by_category"
+    assert seen["arguments"] == {"category": "account_access", "limit": 3}
+    assert seen["retry"] is True
+
+
+async def test_record_feedback_forwards_the_category(
+    wrapper: EmailMCPClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`record_feedback` forwards the record's triage category so approved replies are tagged.
+
+    The category rides along with each stored disposition (todo Task 30), so a later
+    `approved_replies_by_category` lookup can find the ticket's approved reply.
+    """
+    from app.schemas.enums import Category, FeedbackDecision
+    from app.schemas.feedback import FeedbackRecord
+
+    seen: dict[str, Any] = {}
+
+    async def fake_call(tool: str, arguments: dict[str, Any], **_kwargs: Any) -> Any:
+        seen["arguments"] = arguments
+        return {"id": 1}
+
+    monkeypatch.setattr(wrapper, "call_tool", fake_call)
+
+    record = FeedbackRecord(
+        decision=FeedbackDecision.APPROVED_AS_IS,
+        ai_draft="reset it",
+        final_reply="reset it",
+        edit_distance=0,
+        category=Category.ACCOUNT_ACCESS,
+    )
+    await wrapper.record_feedback(7, record)
+
+    assert seen["arguments"]["category"] == "account_access"

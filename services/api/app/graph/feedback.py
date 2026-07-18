@@ -84,6 +84,10 @@ def build_feedback_record(
     final_reply = state.get("final_reply")
     # A rejection has no final reply, so there is nothing to diff against the draft.
     distance = None if final_reply is None else edit_distance(draft.body, final_reply)
+    # Tag the row with the ticket's triage category so an approved reply can be selected
+    # as a same-category few-shot example later (SPEC §4.10). Absent when the run never
+    # triaged (e.g. a blocked injection reaching the gate with no triage result).
+    triage = state.get("triage")
     return FeedbackRecord(
         decision=decision,
         ai_draft=draft.body,
@@ -91,6 +95,7 @@ def build_feedback_record(
         edit_distance=distance,
         rating=rating,
         reason=reason,
+        category=triage.category if triage is not None else None,
     )
 
 

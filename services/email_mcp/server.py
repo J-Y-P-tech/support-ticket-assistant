@@ -131,6 +131,7 @@ def record_feedback(
     edit_distance: int | None = None,
     rating: int | None = None,
     reason: str | None = None,
+    category: str | None = None,
     draft_id: int | None = None,
 ) -> dict[str, Any]:
     """Persist one rep-decision feedback row and return it (SPEC §4.9)."""
@@ -144,8 +145,21 @@ def record_feedback(
             edit_distance=edit_distance,
             rating=rating,
             reason=reason,
+            category=category,
             draft_id=draft_id,
         )
+
+
+@mcp.tool()
+def approved_replies_by_category(category: str, limit: int) -> list[dict[str, Any]]:
+    """Return recent approved replies for a category, newest first (SPEC §4.10).
+
+    The candidate pool for the drafting node's live dynamic few-shot lookup: the most
+    recent replies a rep approved and sent for `category`, each carrying the customer
+    message, the approved reply, the rep rating, and a recency id the selector ranks on.
+    """
+    with db.connect_from_env() as conn:
+        return db.approved_replies_by_category(conn, category=category, limit=limit)
 
 
 @mcp.tool()

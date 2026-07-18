@@ -36,6 +36,7 @@ _TEST_ENV: dict[str, str] = {
     "GROUNDEDNESS_MIN": "0.6",
     "VALIDATE_MAX_ATTEMPTS": "2",
     "EXTRACT_MAX_ATTEMPTS": "2",
+    "FEW_SHOT_LIMIT": "3",
     "API_AUTH_TOKEN": TEST_API_TOKEN,
     "DATABASE_URL": "postgresql://support:test@localhost:5432/support_tickets",
     "EMAIL_MCP_URL": "http://email_mcp:8000/mcp",
@@ -88,6 +89,9 @@ class FakeEmailClient:
         # de-identified SFT/preference record, in the order they were written, so a
         # route test can assert the corpus the send action captured (todo Task 28).
         self.corpus: list[dict[str, Any]] = []
+        # The candidate rows the drafting few-shot lookup returns (todo Task 30); empty
+        # by default so drafting behaves as before few-shot until a test configures them.
+        self.approved_replies: list[dict[str, Any]] = []
 
     async def create_ticket(
         self, message: str, attachments: list[str] | None = None
@@ -242,6 +246,17 @@ class FakeEmailClient:
         self.corpus.append(row)
         return row
 
+    async def approved_replies_by_category(self, category: str, limit: int) -> list[dict[str, Any]]:
+        """Return the configured approved-reply rows for the drafting few-shot lookup.
+
+        Mirrors email_mcp's `approved_replies_by_category` (todo Task 30). Tests set
+        `approved_replies` to the candidate rows the draft node should see; the default
+        empty list makes drafting behave as before few-shot. Records the `(category,
+        limit)` so a test can assert the node queried by the ticket's triage category.
+        """
+        self.calls.append(("approved_replies_by_category", category, limit))
+        return list(self.approved_replies)
+
 
 @pytest.fixture
 def email_client() -> FakeEmailClient:
@@ -360,6 +375,7 @@ def build_paused_workflow(test_settings: Any) -> Any:
         graph = build_workflow(
             llm=FakeLLM(list(_HAPPY_PATH_SCRIPT)),
             kb_client=_FakeKBClient(),
+            email_client=FakeEmailClient(),
             settings=test_settings,
             checkpointer=MemorySaver(),
         )

@@ -24,6 +24,7 @@ from app.graph.workflow import build_workflow, thread_config
 from app.llm.fake import FakeLLM
 from app.schemas.enums import TicketStatus
 from app.schemas.kb import KBSearchResult, KBSource
+from tests.conftest import FakeEmailClient
 
 # Happy-path model script, one response per model-using step in graph order:
 # screen_input → ocr_extract (search-intent fusion) → triage → draft → validate →
@@ -78,6 +79,7 @@ async def test_start_pipeline_runs_a_submission_to_the_human_gate(test_settings:
     graph = build_workflow(
         llm=FakeLLM(list(_HAPPY_PATH_SCRIPT)),
         kb_client=_FakeKBClient(),
+        email_client=FakeEmailClient(),
         settings=test_settings,
         checkpointer=MemorySaver(),
     )

@@ -79,6 +79,7 @@ def _fresh_workflow(test_settings: Any) -> Any:
     return build_workflow(
         llm=FakeLLM(list(_HAPPY_PATH_SCRIPT)),
         kb_client=_FakeKBClient(),
+        email_client=FakeEmailClient(),
         settings=test_settings,
         checkpointer=MemorySaver(),
     )
