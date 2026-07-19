@@ -27,6 +27,10 @@ dependencies = [
     "cryptography>=43,<47",
     # api (Task 24): structured logging with a PII-redaction processor (SPEC §6).
     "structlog>=24,<26",
+    # api (Task 31): self-hosted Langfuse tracing SDK (SPEC §7.2). Pinned to v2 to
+    # match the `langfuse:2` compose image, whose self-host needs only its own
+    # Postgres (no ClickHouse/Redis/object-store), fitting the local-only posture.
+    "langfuse>=2,<3",
 ]
 
 [dependency-groups]
@@ -96,6 +100,13 @@ ignore_missing_imports = true
 # loosening strictness anywhere else.
 [[tool.mypy.overrides]]
 module = ["langgraph.*", "langgraph_checkpoint.*"]
+ignore_missing_imports = true
+
+# Langfuse (Task 31) is imported only by the `observability.langfuse_tracer` adapter,
+# behind the lazily-built tracer factory. Silence its missing-stub noise (the v2 SDK
+# ships no py.typed marker) without loosening strictness anywhere else.
+[[tool.mypy.overrides]]
+module = ["langfuse.*"]
 ignore_missing_imports = true
 
 # These modules are the thin seam that binds our typed state to LangGraph's own

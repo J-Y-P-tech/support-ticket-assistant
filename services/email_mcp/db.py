@@ -184,7 +184,7 @@ def get_ticket(conn: Connection, ticket_id: int) -> dict[str, Any] | None:
     with conn.cursor(row_factory=dict_row) as cur:
         cur.execute(
             "SELECT id, reference_code, status, message, attachments, category, "
-            "urgency, sentiment, reply, created_at, updated_at "
+            "urgency, sentiment, reply, trace_id, created_at, updated_at "
             "FROM tickets WHERE id = %s",
             (ticket_id,),
         )
@@ -289,6 +289,26 @@ def record_sent_reply(
         (reply, _STATUS_RESOLVED, ticket_id),
     )
     _record_audit(conn, ticket_id, "reply_sent", actor=rep_id)
+    conn.commit()
+    return get_ticket(conn, ticket_id)
+
+
+def set_trace_id(conn: Connection, *, ticket_id: int, trace_id: str) -> dict[str, Any] | None:
+    """Store a ticket's Langfuse trace id and return the updated row (None if unknown).
+
+    SPEC §7.2: the api emits one trace per ticket and persists the id Langfuse hands
+    back here, so a case links to its trace. Returns a neutral None for an unknown id
+    (nothing written), mirroring `get_ticket` — an unknown id cannot be told apart from
+    a known one via an error. Not audited: the trace id is observability plumbing, not a
+    case mutation the compliance trail tracks.
+    """
+    cur = conn.execute(
+        "UPDATE tickets SET trace_id = %s, updated_at = now() WHERE id = %s",
+        (trace_id, ticket_id),
+    )
+    if cur.rowcount == 0:
+        conn.rollback()
+        return None
     conn.commit()
     return get_ticket(conn, ticket_id)
 

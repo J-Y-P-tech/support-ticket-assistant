@@ -115,6 +115,21 @@ class EmailMCPClient(MCPClient):
             )
         )
 
+    async def set_trace_id(self, ticket_id: int, trace_id: str) -> dict[str, Any] | None:
+        """Store a ticket's Langfuse trace id and return the updated ticket (SPEC §7.2).
+
+        The api's write path for the trace id it gets back from Langfuse after emitting
+        a ticket's trace. A write — `retry_on_disconnect` is left off so a dropped
+        connection surfaces rather than risking a spurious re-write. Returns None if the
+        id is unknown (neutral not-found).
+        """
+        return _to_optional(
+            await self.call_tool(
+                "set_trace_id",
+                {"ticket_id": ticket_id, "trace_id": trace_id},
+            )
+        )
+
     async def update_status(
         self, ticket_id: int, status: str, actor: str | None = None
     ) -> dict[str, Any] | None:

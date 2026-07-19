@@ -2,8 +2,10 @@
 # postgres + four app services (email_mcp, kb_mcp, api, frontend). email_mcp/api/
 # frontend carry the no-AI path (submit -> store -> rep queue -> lookup); kb_mcp is
 # the Knowledge-Base connector the AI pipeline's retrieve step calls (SPEC §4.4).
-# langfuse is wired in a later task. Ollama is NOT containerized; services reach it on
-# the host via host.docker.internal (Linux needs the host-gateway mapping per service).
+# langfuse (Task 31) is the self-hosted observability service with its own Postgres
+# datastore — no ticket data leaves the machine (SPEC §7.2). Ollama is NOT containerized;
+# services reach it on the host via host.docker.internal (Linux needs the host-gateway
+# mapping per service).
 #
 # All app services build from the repo root (context: .) because their Dockerfiles
 # COPY `pyproject.toml`/`uv.lock` and their `services/<name>` tree from there. They
@@ -61,6 +63,46 @@ services:
     # at http://kb_mcp:8000/mcp (KB_MCP_URL in .env).
     env_file: .env
 
+  # Self-hosted Langfuse (SPEC §7.2): one PII-redacted trace per ticket, scores, and
+  # versioned prompts — all on-box, no ticket data leaving the machine. Pinned to v2,
+  # whose self-host needs only its own Postgres (langfuse-db), unlike v3's ClickHouse/
+  # Redis/object-store sidecars. LANGFUSE_INIT_* provisions a project whose keys equal
+  # the LANGFUSE_PUBLIC_KEY/SECRET_KEY the api reads from .env, so a fresh stack traces
+  # out of the box. Reachable in-cluster at http://langfuse:3000 (LANGFUSE_HOST in .env).
+  langfuse-db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${LANGFUSE_DB_USER}
+      POSTGRES_PASSWORD: ${LANGFUSE_DB_PASSWORD}
+      POSTGRES_DB: ${LANGFUSE_DB_NAME}
+    volumes:
+      - langfuse_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  langfuse:
+    image: langfuse/langfuse:2
+    restart: unless-stopped
+    depends_on:
+      langfuse-db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${LANGFUSE_DB_USER}:${LANGFUSE_DB_PASSWORD}@langfuse-db:5432/${LANGFUSE_DB_NAME}
+      NEXTAUTH_URL: ${LANGFUSE_HOST}
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET}
+      SALT: ${LANGFUSE_SALT}
+      TELEMETRY_ENABLED: "false"
+      LANGFUSE_INIT_ORG_ID: support-ticket-assistant
+      LANGFUSE_INIT_PROJECT_ID: support-ticket-assistant
+      LANGFUSE_INIT_PROJECT_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY}
+      LANGFUSE_INIT_PROJECT_SECRET_KEY: ${LANGFUSE_SECRET_KEY}
+    ports:
+      - "${LANGFUSE_PORT:-3000}:3000"
+
   api:
     build:
       context: .
@@ -77,6 +119,8 @@ services:
       email_mcp:
         condition: service_started
       kb_mcp:
+        condition: service_started
+      langfuse:
         condition: service_started
     ports:
       - "${API_PORT:-8001}:8000"
@@ -102,3 +146,4 @@ services:
 
 volumes:
   pgdata:
+  langfuse_pgdata:

@@ -28,7 +28,8 @@ from langgraph.types import StateSnapshot
 from app.config import Settings, get_settings
 from app.graph.corpus import record_corpus
 from app.graph.feedback import record_feedback
-from app.graph.runtime import get_workflow
+from app.graph.runtime import get_tracer, get_workflow
+from app.graph.trace import Tracer, attach_scores
 from app.graph.workflow import thread_config
 from app.mcp_clients.email import EmailMCPClient, get_email_client
 from app.schemas.enums import FeedbackDecision, TicketStatus
@@ -205,6 +206,7 @@ async def rep_send(
     workflow: CompiledStateGraph = Depends(get_workflow),
     email: EmailMCPClient = Depends(get_email_client),
     settings: Settings = Depends(get_settings),
+    tracer: Tracer = Depends(get_tracer),
 ) -> RepActionResult:
     """Send the approved/edited reply: resume through `finalize`, then persist it.
 
@@ -238,6 +240,10 @@ async def rep_send(
     await record_corpus(
         email, ticket_id=ticket_id, state=final, model=settings.llm_model, rating=payload.rating
     )
+    # Attach the rep's disposition to the ticket's Langfuse trace as scores — draft
+    # accepted, edit distance, rating (SPEC §7.2/§7.4). Best-effort: a ticket that was
+    # never traced (offline run) has no trace id, so nothing is attached.
+    await attach_scores(tracer, email, ticket_id=ticket_id, state=final, rating=payload.rating)
     return RepActionResult(ticket_id=ticket_id, status=TicketStatus.RESOLVED, reply=reply)
 
 
@@ -247,6 +253,7 @@ async def rep_reject(
     payload: RepRejectRequest,
     workflow: CompiledStateGraph = Depends(get_workflow),
     email: EmailMCPClient = Depends(get_email_client),
+    tracer: Tracer = Depends(get_tracer),
 ) -> RepActionResult:
     """Reject the draft: resume with a rejection and route the case back for research.
 
@@ -266,4 +273,8 @@ async def rep_reject(
     await record_feedback(
         email, ticket_id=ticket_id, state=final, rating=payload.rating, reason=payload.reason
     )
+    # Attach the rejection to the ticket's Langfuse trace as scores (draft not accepted,
+    # rating) — the negative signal the quality trend consumes (SPEC §7.2/§7.4). A ticket
+    # that never drafted (no trace, or a hand-off with no draft) yields no scores.
+    await attach_scores(tracer, email, ticket_id=ticket_id, state=final, rating=payload.rating)
     return RepActionResult(ticket_id=ticket_id, status=result_status, reply=None)

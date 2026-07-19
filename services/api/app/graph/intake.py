@@ -28,7 +28,8 @@ from fastapi import FastAPI
 
 from app.config import Settings
 from app.graph.audit import record_node_audits
-from app.graph.runtime import get_workflow_for_app
+from app.graph.runtime import get_tracer_for_app, get_workflow_for_app
+from app.graph.trace import emit_ticket_trace
 from app.graph.workflow import thread_config
 from app.mcp_clients.email import email_client_for_app
 from app.schemas.enums import TicketStatus
@@ -94,6 +95,13 @@ async def start_pipeline(
         email = email_client_for_app(app, settings)
         await record_node_audits(
             email, ticket_id=ticket_id, state=snapshot.values, model=settings.llm_model
+        )
+        # Emit the one PII-redacted Langfuse trace for this ticket's run and persist its
+        # id on the ticket (SPEC §7.2). Best-effort: with no Langfuse configured the
+        # no-op tracer returns no id and nothing is stored — the case is unaffected.
+        tracer = get_tracer_for_app(app, settings)
+        await emit_ticket_trace(
+            tracer, email, ticket_id=ticket_id, state=snapshot.values, model=settings.llm_model
         )
     except Exception:
         _logger.exception("pipeline failed for ticket %s; left New for manual handling", ticket_id)

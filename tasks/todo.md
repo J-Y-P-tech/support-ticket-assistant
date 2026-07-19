@@ -57,10 +57,10 @@ Order is dependency-correct; do not start a task before its dependencies are che
 - [x] **27.** feedback capture (approved/edited-diff/rejected + rating) — *deps: 18,26*
 - [x] **28.** training corpus (SFT + preference pairs) + export JSONL + PII test — *deps: 27*
 - [x] **29.** dynamic prompting: Langfuse prompts + deterministic few-shot — *deps: 13,27*
-- [ ] **30.** live few-shot lookup: email_mcp query approved-replies-by-category (+ index migration + api client) → wire `draft_node` to select + inject — *deps: 17,28,29*
+- [x] **30.** live few-shot lookup: email_mcp query approved-replies-by-category (+ index migration + api client) → wire `draft_node` to select + inject — *deps: 17,28,29*
 
 ## Phase 10 — Observability
-- [ ] **31.** Langfuse service + one PII-redacted trace per ticket + scores — *deps: 17,24,27*
+- [x] **31.** Langfuse service + one PII-redacted trace per ticket + scores — *deps: 17,24,27*
 
 ## Phase 11 — Evals + CI
 - [ ] **32.** eval + red-team suites + runner + eval-gated promotion — *deps: 15,16,29*

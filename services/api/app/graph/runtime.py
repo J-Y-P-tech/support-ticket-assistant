@@ -25,6 +25,7 @@ from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 from langgraph.graph.state import CompiledStateGraph
 
 from app.config import Settings, get_settings
+from app.graph.trace import NoOpTracer, Tracer
 from app.graph.workflow import build_workflow
 from app.llm.ollama import OllamaLLM
 from app.mcp_clients.email import email_client_for_app
@@ -88,6 +89,50 @@ async def _build_app_workflow(app: FastAPI, settings: Settings) -> CompiledState
         settings=settings,
         checkpointer=checkpointer,
     )
+
+
+def build_tracer(settings: Settings) -> Tracer:
+    """Return the Langfuse tracer, or the no-op fallback when Langfuse is unavailable.
+
+    Lazily imports the SDK-backed `LangfuseTracer` (the only module that touches the
+    `langfuse` SDK) and builds it from config. Any failure — the SDK not installed
+    (offline CI), or the client refusing to construct — falls back to `NoOpTracer`, so a
+    run without Langfuse traces to nothing and works unchanged (SPEC §10/§12). Emitting
+    itself is best-effort inside the adapter, so this only guards *construction*.
+    """
+    try:
+        from app.observability.langfuse_tracer import LangfuseTracer
+
+        return LangfuseTracer(
+            host=settings.langfuse_host,
+            public_key=settings.langfuse_public_key.get_secret_value(),
+            secret_key=settings.langfuse_secret_key.get_secret_value(),
+        )
+    except Exception:
+        return NoOpTracer()
+
+
+def get_tracer_for_app(app: FastAPI, settings: Settings) -> Tracer:
+    """Return the process-wide tracer, building it on first use and caching it.
+
+    Shared by the submit-time pipeline trigger (which emits a ticket's trace) and the
+    rep-action routes (which attach feedback scores), so both write to the same Langfuse
+    client. Cached on `app.state` like the MCP clients.
+    """
+    tracer = getattr(app.state, "tracer", None)
+    if tracer is None:
+        tracer = build_tracer(settings)
+        app.state.tracer = tracer
+    return cast("Tracer", tracer)
+
+
+def get_tracer(request: Request, settings: Settings = Depends(get_settings)) -> Tracer:
+    """FastAPI dependency: return the process-wide tracer for the rep-action routes.
+
+    A thin request-scoped wrapper over `get_tracer_for_app`; overridden in tests only
+    when a suite wants to assert what was traced (most default to the no-op fallback).
+    """
+    return get_tracer_for_app(request.app, settings)
 
 
 def _shared_kb_client(app: FastAPI, settings: Settings) -> KBMCPClient:

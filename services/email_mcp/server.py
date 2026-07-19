@@ -104,6 +104,13 @@ def record_sent_reply(ticket_id: int, reply: str, rep_id: str) -> dict[str, Any]
 
 
 @mcp.tool()
+def set_trace_id(ticket_id: int, trace_id: str) -> dict[str, Any] | None:
+    """Store a ticket's Langfuse trace id and return the updated row (None if unknown)."""
+    with db.connect_from_env() as conn:
+        return db.set_trace_id(conn, ticket_id=ticket_id, trace_id=trace_id)
+
+
+@mcp.tool()
 def record_audit(
     ticket_id: int,
     event: str,

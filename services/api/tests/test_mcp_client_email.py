@@ -269,6 +269,48 @@ async def test_approved_replies_by_category_returns_list_and_opts_into_retry(
     assert seen["retry"] is True
 
 
+async def test_set_trace_id_forwards_arguments_as_a_write(
+    wrapper: EmailMCPClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`set_trace_id` calls the `set_trace_id` tool with the id, and never retries.
+
+    Storing the ticket's Langfuse trace id (SPEC §7.2) is a write, so — like the other
+    writes — it leaves `retry_on_disconnect` off, and it maps email_mcp's neutral
+    not-found marker (`{"found": False}`) for an unknown ticket back to None.
+    """
+    seen: dict[str, Any] = {}
+
+    async def fake_call(
+        tool: str, arguments: dict[str, Any], *, retry_on_disconnect: bool = False
+    ) -> Any:
+        seen["tool"] = tool
+        seen["arguments"] = arguments
+        seen["retry"] = retry_on_disconnect
+        return {"id": 7, "trace_id": "trace-abc"}
+
+    monkeypatch.setattr(wrapper, "call_tool", fake_call)
+
+    result = await wrapper.set_trace_id(7, "trace-abc")
+
+    assert result == {"id": 7, "trace_id": "trace-abc"}
+    assert seen["tool"] == "set_trace_id"
+    assert seen["arguments"] == {"ticket_id": 7, "trace_id": "trace-abc"}
+    assert seen["retry"] is False
+
+
+async def test_set_trace_id_maps_found_false_to_none(
+    wrapper: EmailMCPClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unknown ticket's `{"found": False}` marker maps to a neutral None."""
+
+    async def fake_call(tool: str, arguments: dict[str, Any], **_kwargs: Any) -> Any:
+        return {"found": False}
+
+    monkeypatch.setattr(wrapper, "call_tool", fake_call)
+
+    assert await wrapper.set_trace_id(999_999, "trace-x") is None
+
+
 async def test_record_feedback_forwards_the_category(
     wrapper: EmailMCPClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
