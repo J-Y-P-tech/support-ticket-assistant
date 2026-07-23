@@ -23,7 +23,9 @@ import db
 # defaults match `.env.example` (EMAIL_MCP_URL=http://email_mcp:8000/mcp).
 mcp = FastMCP(
     "email_mcp",
-    host=os.environ.get("EMAIL_MCP_HOST", "0.0.0.0"),
+    # Bind all interfaces: a containerized service must listen on 0.0.0.0 so the api
+    # container can reach it across the Compose network (overridable via EMAIL_MCP_HOST).
+    host=os.environ.get("EMAIL_MCP_HOST", "0.0.0.0"),  # nosec B104
     port=int(os.environ.get("EMAIL_MCP_PORT", "8000")),
     streamable_http_path="/mcp",
 )

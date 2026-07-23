@@ -39,9 +39,11 @@ test: ## Run the unit/contract/workflow test suite (pytest; fake LLM, no model)
 eval: ## Run the AI eval + red-team suites (golden triage/groundedness need host Ollama)
 	# Full gate: red-team suites (deterministic) + golden triage/groundedness against the
 	# host Ollama model. Load .env so config resolves the model tag/URL on a plain host
-	# process (like `migrate`/`export-training-data`). Add `-- --red-team-only` to run just
-	# the model-free red-team gate (no Ollama), e.g. for a CI job without a model.
-	set -a; [ -f .env ] && . ./.env; set +a; uv run python -m evals.run_eval
+	# process (like `migrate`/`export-training-data`). PYTHONPATH=services/api puts the
+	# api's `app.*` package (which the runner reuses) on the import path — same as the CI
+	# eval job. For the model-free red-team gate only (no Ollama), run the runner directly:
+	#   PYTHONPATH=services/api uv run python -m evals.run_eval --red-team-only
+	set -a; [ -f .env ] && . ./.env; set +a; PYTHONPATH=services/api uv run python -m evals.run_eval
 
 migrate: ## Apply DB migrations via email_mcp (reads POSTGRES_* from the env/.env)
 	# Load .env into the environment first: migrate.py reads os.environ directly,

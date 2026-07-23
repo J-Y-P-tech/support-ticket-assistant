@@ -55,6 +55,16 @@ dev = [
 line-length = 100
 target-version = ["py312"]
 
+[tool.bandit]
+# Security gate (SPEC §12.4). Bandit is SAST over *shippable* code, so exclude the test
+# suites: tests use `assert` and embed dummy tokens/keys by design, which trip B101/B105
+# as noise, not real risk. B101 (assert_used) is skipped globally too — db.py has a few
+# `assert row is not None` narrowing hints after `INSERT ... RETURNING` that are safe and
+# never a runtime guard. Real checks (hardcoded secrets, bind-all, SQL injection,
+# subprocess, …) stay enabled; the two intentional 0.0.0.0 binds carry inline `# nosec B104`.
+exclude_dirs = ["*/tests/*"]
+skips = ["B101"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"

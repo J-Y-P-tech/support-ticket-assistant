@@ -64,7 +64,7 @@ Order is dependency-correct; do not start a task before its dependencies are che
 
 ## Phase 11 — Evals + CI
 - [x] **32.** eval + red-team suites + runner + eval-gated promotion — *deps: 15,16,29*
-- [ ] **33.** CI pipeline (.github/workflows/ci.yml) — *deps: 32*
+- [x] **33.** CI pipeline (.github/workflows/ci.yml) — *deps: 32*
 - [ ] **Checkpoint D** — complete: all §13 invariants covered, eval + security gates green
 
 ---

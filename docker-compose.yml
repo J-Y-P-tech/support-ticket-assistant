@@ -111,8 +111,12 @@ services:
     # All api Settings come from .env (LLM tag, tokens, MCP URLs, keys). Values
     # there already point at the in-cluster service names (EMAIL_MCP_URL=...email_mcp...).
     env_file: .env
-    # Reach the host's Ollama via host.docker.internal (used from Task 10 on; wired
-    # now so the LLM path needs no compose change). Linux requires host-gateway.
+    # Reach the host's Ollama via host.docker.internal (used from Task 10 on). Same
+    # split as POSTGRES_HOST above: .env defaults OLLAMA_BASE_URL to localhost for
+    # host-run tools (`make eval`), and in-cluster this container overrides it to the
+    # host gateway. Linux requires the host-gateway mapping below.
+    environment:
+      OLLAMA_BASE_URL: http://host.docker.internal:11434
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

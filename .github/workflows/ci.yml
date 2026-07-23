@@ -75,7 +75,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v3
       - name: SAST (bandit)
-        run: uvx bandit -r services -q
+        # `-c pyproject.toml` applies the [tool.bandit] config (excludes test suites, skips
+        # B101 assert-noise). SAST gates on shippable code; the two intentional 0.0.0.0 binds
+        # carry inline `# nosec B104`.
+        run: uvx bandit -c pyproject.toml -r services -q
       - name: Dependency audit (pip-audit)
         run: uvx pip-audit
       - name: Secret scan (gitleaks)

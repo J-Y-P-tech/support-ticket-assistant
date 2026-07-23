@@ -26,7 +26,9 @@ from providers.mock_kb import MockKBProvider
 # (KB_MCP_URL points the api at this service). Served at /mcp like email_mcp.
 mcp = FastMCP(
     "kb_mcp",
-    host=os.environ.get("KB_MCP_HOST", "0.0.0.0"),
+    # Bind all interfaces: a containerized service must listen on 0.0.0.0 so the api
+    # container can reach it across the Compose network (overridable via KB_MCP_HOST).
+    host=os.environ.get("KB_MCP_HOST", "0.0.0.0"),  # nosec B104
     port=int(os.environ.get("KB_MCP_PORT", "8000")),
     streamable_http_path="/mcp",
 )
