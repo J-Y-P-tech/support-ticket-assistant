@@ -22,7 +22,13 @@ dependencies = [
     # api (Task 17): the LangGraph workflow engine (SPEC §2/§5) + its Postgres
     # checkpointer, so a case pending human review survives a restart (SPEC §5).
     "langgraph>=0.2,<1",
-    "langgraph-checkpoint-postgres>=2,<3",
+    # Postgres checkpointer. Floor at 3.0.0 so it pulls langgraph-checkpoint >=3.0.0,
+    # which patches the JsonPlusSerializer RCE (CVE-2025-64439, HIGH) the trivy gate
+    # blocks. Capped <3.1.0 on purpose: postgres 3.1.0 requires checkpoint >=4.1.0, which
+    # langgraph 0.6.x (checkpoint <4.0.0) rejects — the 3.0.x line keeps us on checkpoint
+    # 3.x with no langgraph major bump. We use only from_conn_string()/setup() (stable
+    # across 2→3) and never the vulnerable json serializer mode.
+    "langgraph-checkpoint-postgres>=3.0.0,<3.1.0",
     # api (Task 23): authenticated encryption (Fernet) for PII at rest (SPEC §6).
     # Floor at 48.0.1: earlier wheels bundle a vulnerable OpenSSL (GHSA-537c-gmf6-5ccf,
     # HIGH) that the trivy security gate blocks. The Fernet API is unchanged.
@@ -54,11 +60,17 @@ dev = [
 ]
 
 [tool.uv]
-# Constrain a transitive dependency (streamlit → gitpython) up to its patched release.
-# gitpython < 3.1.52 carries HIGH command-injection CVEs (GHSA-2f96-g7mh-g2hx,
-# GHSA-956x-8gvw-wg5v, GHSA-rwj8-pgh3-r573, GHSA-v396-v7q4-x2qj) that the trivy gate
-# blocks. A constraint bumps the locked version without adding gitpython as a direct dep.
-constraint-dependencies = ["gitpython>=3.1.52"]
+# Constrain transitive dependencies up to their patched releases (trivy HIGH gate):
+#  - streamlit → gitpython: < 3.1.52 has command-injection CVEs (GHSA-2f96-g7mh-g2hx,
+#    GHSA-956x-8gvw-wg5v, GHSA-rwj8-pgh3-r573, GHSA-v396-v7q4-x2qj).
+#  - langgraph-checkpoint: < 3.0.0 has the JsonPlusSerializer RCE (CVE-2025-64439). The
+#    postgres-checkpointer pin above already targets the 3.0.x line; this floor makes the
+#    fixed checkpoint version explicit so the resolver can never pick a vulnerable 2.x.
+# Constraints bump locked versions without adding these as direct dependencies.
+constraint-dependencies = [
+    "gitpython>=3.1.52",
+    "langgraph-checkpoint>=3.0.0",
+]
 
 [tool.black]
 line-length = 100
