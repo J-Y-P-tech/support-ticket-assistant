@@ -1,0 +1,30 @@
+# gitleaks configuration for the security gate (SPEC §12.4 secret scan).
+#
+# Extends the full default gitleaks ruleset and allowlists intentional, self-labeled
+# DUMMY credentials that live only in unit-test fixtures — never real secrets. The gate
+# still scans all shippable code for genuine leaks; `.env` is gitignored and never
+# committed, and `.env.example` holds only `change-me-*` placeholders.
+
+title = "support-ticket-assistant gitleaks config"
+
+[extend]
+# Keep every built-in rule; only add allowlisting below.
+useDefault = true
+
+[allowlist]
+description = "Intentional dummy credentials in unit-test fixtures (not real secrets)"
+
+# The flagged value is a fixed fake Fernet key used to exercise PII encryption in tests.
+# Base64-decoded it literally reads 'test-fernet-key-do-not-use-for-real'; it only trips
+# the entropy check because a valid Fernet key must be 44-char base64. Allow the exact
+# value wherever it appears.
+regexes = [
+    '''dGVzdC1mZXJuZXQta2V5LWRvLW5vdC11c2UtZm9yLXJlYWw=''',
+]
+
+# And, more generally, dummy credentials inside test suites: fixtures need realistic-
+# shaped tokens/keys, and a secret scanner gates on shippable code, not test data. This
+# mirrors the bandit config, which excludes the same test directories.
+paths = [
+    '''.*/tests/.*''',
+]
