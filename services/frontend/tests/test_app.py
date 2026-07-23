@@ -40,10 +40,9 @@ class FakeApiClient:
         """Return the configured queue page (empty unless a rep test sets one)."""
         return self.queue_page
 
-    def fetch_review(self, ticket_id: int) -> dict[str, Any]:
-        """Return the configured draft-review payload for a ticket."""
+    def fetch_review(self, ticket_id: int) -> dict[str, Any] | None:
+        """Return the configured draft-review payload, or None if not yet at the gate."""
         self.actions.append(("fetch_review", ticket_id))
-        assert self.review is not None
         return self.review
 
     def approve_draft(self, ticket_id: int) -> dict[str, Any]:
@@ -56,9 +55,16 @@ class FakeApiClient:
         self.actions.append(("edit", ticket_id, reply))
         return {"ticket_id": ticket_id, "status": "Drafted", "reply": None}
 
-    def send_draft(self, ticket_id: int, rep_id: str) -> dict[str, Any]:
-        """Record a send and return a Resolved result carrying the drafted reply."""
+    def send_draft(self, ticket_id: int, rep_id: str) -> dict[str, Any] | None:
+        """Record a send; return None unless a draft was staged (the api's 409 → None).
+
+        Mirrors the two-step gate: send fails closed with no prior approve/edit, so the
+        client maps that 409 to None and the fake models it the same way.
+        """
         self.actions.append(("send", ticket_id, rep_id))
+        staged = any(action[0] in ("approve", "edit") for action in self.actions)
+        if not staged:
+            return None
         reply = self.review["draft"]["body"] if self.review else None
         return {"ticket_id": ticket_id, "status": "Resolved", "reply": reply}
 
@@ -187,3 +193,42 @@ def test_rep_unverified_draft_shows_a_warning_banner() -> None:
     at.sidebar.radio[0].set_value("Rep workspace").run()
 
     assert any("unverified" in msg.value.lower() for msg in at.warning)
+
+
+def test_rep_review_of_a_still_processing_ticket_shows_a_notice_not_an_error() -> None:
+    """A queued ticket whose draft isn't ready (api 409 → None) shows a calm notice.
+
+    When a case is freshly submitted the run has not yet paused at the human gate, so
+    `fetch_review` returns None. The workspace must show a "not ready yet" info message
+    instead of surfacing the raw 409 as a traceback.
+    """
+    client = FakeApiClient()
+    client.queue_page = _queued_ticket()
+    client.review = None
+    at = _app_with_client(client)
+
+    at.sidebar.radio[0].set_value("Rep workspace").run()
+
+    assert not at.exception
+    assert any("still being processed" in msg.value.lower() for msg in at.info)
+
+
+def test_rep_send_without_staging_shows_a_warning_not_an_error() -> None:
+    """Pressing Send before Approve/Save-edit warns the rep instead of crashing.
+
+    The two-step gate fails closed: with nothing staged the api answers 409, the client
+    maps it to None, and the workspace must prompt the rep to approve/edit first rather
+    than surfacing the raw conflict as a traceback.
+    """
+    client = FakeApiClient()
+    client.queue_page = _queued_ticket()
+    client.review = _review_payload()
+    at = _app_with_client(client)
+
+    at.sidebar.radio[0].set_value("Rep workspace").run()
+    at.text_input(key="rep_rep_id").set_value("rep-1").run()
+    at.button(key="rep_send").click().run()
+
+    assert not at.exception
+    assert any("nothing is staged" in msg.value.lower() for msg in at.warning)
+    assert not at.success

@@ -115,7 +115,12 @@ async def test_start_pipeline_records_node_audits_at_the_pause(
 
     # Run the submit-time pipeline for a freshly submitted ticket, to the pause.
     await intake.start_pipeline(
-        app, test_settings, ticket_id=42, message=_BENIGN_MESSAGE, attachments=[]
+        app,
+        test_settings,
+        ticket_id=42,
+        reference_code="TKT-0042",
+        message=_BENIGN_MESSAGE,
+        attachments=[],
     )
 
     # The ticket's trail carries exactly the ordered node-outcome rows, all by the system.

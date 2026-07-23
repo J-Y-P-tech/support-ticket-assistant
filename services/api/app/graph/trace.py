@@ -38,6 +38,7 @@ from typing import Any, Protocol
 from app.graph.audit import build_audit_entries
 from app.graph.feedback import build_feedback_record
 from app.logging_config import redact_pii
+from app.reference_code import format_reference_code
 from app.schemas.enums import FeedbackDecision
 
 # The trace name every ticket's run is recorded under in Langfuse — a stable label so
@@ -79,13 +80,16 @@ class TraceScore:
 class TicketTrace:
     """A ticket's whole run as one PII-redacted trace destined for Langfuse (SPEC §7.2).
 
-    `ticket_id` keys it to the case; `input` is the *redacted* customer message; `spans`
-    are the ordered node outcomes; `scores` are the metrics known at build time;
-    `metadata` names the host model. Nothing here carries a full account/card number or
-    raw attachment text — the builder scrubs before it constructs the trace.
+    `ticket_id` keys it to the case; `reference_code` is the customer-facing `TKT-####`
+    code, used as the Langfuse trace id so a rep can search the dashboard by the same code
+    they see everywhere else; `input` is the *redacted* customer message; `spans` are the
+    ordered node outcomes; `scores` are the metrics known at build time; `metadata` names
+    the host model. Nothing here carries a full account/card number or raw attachment text
+    — the builder scrubs before it constructs the trace.
     """
 
     ticket_id: int
+    reference_code: str
     input: str
     spans: list[TraceSpan]
     scores: list[TraceScore] = field(default_factory=list)
@@ -102,6 +106,7 @@ class TicketTrace:
         return {
             "name": self.name,
             "ticket_id": self.ticket_id,
+            "reference_code": self.reference_code,
             "input": self.input,
             "metadata": self.metadata,
             "spans": [
@@ -116,11 +121,11 @@ class TicketTrace:
 
 
 class Tracer(Protocol):
-    """The two-method seam the trace write steps depend on (SPEC §7.2).
+    """The seam the trace write steps depend on (SPEC §7.2).
 
     Typed structurally so the submit-time trigger and the rep routes depend only on
-    `emit`/`add_scores`, not on the Langfuse SDK — the real adapter and the tests' fakes
-    both satisfy it without inheritance.
+    `emit`/`add_scores`/`set_user`, not on the Langfuse SDK — the real adapter and the
+    tests' fakes both satisfy it without inheritance.
     """
 
     async def emit(self, trace: TicketTrace) -> str:
@@ -129,6 +134,10 @@ class Tracer(Protocol):
 
     async def add_scores(self, trace_id: str, scores: list[TraceScore]) -> None:
         """Attach quality scores to an already-emitted trace by its id."""
+        ...
+
+    async def set_user(self, trace_id: str, user_id: str) -> None:
+        """Set the handling rep as the trace's user on an already-emitted trace."""
         ...
 
 
@@ -146,6 +155,10 @@ class NoOpTracer:
 
     async def add_scores(self, trace_id: str, scores: list[TraceScore]) -> None:
         """Discard the scores (nothing was traced to attach them to)."""
+        return None
+
+    async def set_user(self, trace_id: str, user_id: str) -> None:
+        """Discard the user (nothing was traced to attribute it to)."""
         return None
 
 
@@ -182,8 +195,13 @@ def build_trace(state: Mapping[str, Any], *, model: str) -> TicketTrace:
         # The drafted span carries the model's response text — redacted, like the logs.
         output = redact_pii(draft.body) if entry.event == "drafted" and draft is not None else None
         spans.append(TraceSpan(name=entry.event, detail=entry.detail, output=output))
+    # Prefer the reference code threaded through the run; derive it from the id only as a
+    # defensive fallback (an older checkpoint predating the field), since the two are
+    # assigned together at ticket creation.
+    reference_code = state.get("reference_code") or format_reference_code(state["ticket_id"])
     return TicketTrace(
         ticket_id=state["ticket_id"],
+        reference_code=reference_code,
         input=redact_pii(state.get("message", "") or ""),
         spans=spans,
         scores=build_scores(state),
@@ -256,18 +274,23 @@ async def attach_scores(
     ticket_id: int,
     state: Mapping[str, Any],
     rating: int | None = None,
+    rep_id: str | None = None,
 ) -> None:
-    """Attach a finished run's quality scores to its Langfuse trace (SPEC §7.2/§7.4).
+    """Attach a finished run's disposition to its Langfuse trace (SPEC §7.2/§7.4).
 
     The thin write step behind the rep-action routes: it reads the trace id persisted on
-    the ticket and, when the case was traced, attaches the disposition scores under it
-    (draft accepted, edit distance, rating). A ticket that was never traced (an offline
-    run) has no id, so nothing is attached — the send/reject still succeeds.
+    the ticket and, when the case was traced, records the rep who handled it as the
+    trace's user (so the dashboard's User column names the handling rep) and attaches the
+    disposition scores under it (draft accepted, edit distance, rating). A ticket that was
+    never traced (an offline run) has no id, so nothing is attached — the send/reject
+    still succeeds.
     """
     ticket = await email.get_ticket(ticket_id)
     trace_id = ticket.get("trace_id") if ticket else None
     if not trace_id:
         return
+    if rep_id:
+        await tracer.set_user(trace_id, rep_id)
     scores = build_scores(state, rating=rating)
     if scores:
         await tracer.add_scores(trace_id, scores)

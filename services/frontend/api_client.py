@@ -75,14 +75,18 @@ class ApiClient:
         response.raise_for_status()
         return _json_dict(response)
 
-    def fetch_review(self, ticket_id: int) -> dict[str, Any]:
-        """Return the draft-review payload for a ticket paused at the human gate.
+    def fetch_review(self, ticket_id: int) -> dict[str, Any] | None:
+        """Return the draft-review payload for a ticket paused at the human gate, or None.
 
         The payload (message, triage, sources, draft, warning flags) the rep workspace
-        renders; only valid while the case is awaiting review (the api answers 409
-        otherwise, surfaced here as an error rather than an empty draft).
+        renders; only valid while the case is awaiting review. A freshly-submitted ticket
+        whose draft is still being generated is not yet at the gate, so the api answers
+        409 — mapped here to `None` (as `lookup_ticket` maps a 404) so the view can show a
+        "not ready yet" message instead of surfacing an error.
         """
         response = self._client.get(f"/rep/tickets/{ticket_id}/review")
+        if response.status_code == httpx.codes.CONFLICT:
+            return None
         response.raise_for_status()
         return _json_dict(response)
 
@@ -98,13 +102,18 @@ class ApiClient:
         response.raise_for_status()
         return _json_dict(response)
 
-    def send_draft(self, ticket_id: int, rep_id: str) -> dict[str, Any]:
+    def send_draft(self, ticket_id: int, rep_id: str) -> dict[str, Any] | None:
         """Send the approved/edited reply: the api resumes through finalize and persists it.
 
         `rep_id` is the audit marker the api requires to resolve the case (SPEC §4.7).
-        Returns the action result carrying the sent reply and the Resolved status.
+        Returns the action result carrying the sent reply and the Resolved status, or
+        `None` when nothing has been staged yet — the two-step gate fails closed with a
+        409 if no draft was approved or edited first, mapped here so the view can prompt
+        the rep to approve/edit rather than surfacing an error.
         """
         response = self._client.post(f"/rep/tickets/{ticket_id}/send", json={"rep_id": rep_id})
+        if response.status_code == httpx.codes.CONFLICT:
+            return None
         response.raise_for_status()
         return _json_dict(response)
 

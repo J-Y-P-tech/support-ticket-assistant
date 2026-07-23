@@ -50,6 +50,7 @@ class PipelineStarter(Protocol):
         settings: Settings,
         *,
         ticket_id: int,
+        reference_code: str,
         message: str,
         attachments: list[str],
     ) -> None:
@@ -62,6 +63,7 @@ async def start_pipeline(
     settings: Settings,
     *,
     ticket_id: int,
+    reference_code: str,
     message: str,
     attachments: list[str],
 ) -> None:
@@ -78,6 +80,7 @@ async def start_pipeline(
     """
     initial: dict[str, Any] = {
         "ticket_id": ticket_id,
+        "reference_code": reference_code,
         "message": message,
         "attachments": attachments,
         "extracted_facts": None,

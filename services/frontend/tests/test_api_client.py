@@ -159,6 +159,16 @@ def test_fetch_review_gets_the_payload_for_a_ticket_id() -> None:
     assert result["sources"][0]["id"] == "KB-1"
 
 
+def test_fetch_review_maps_409_to_none() -> None:
+    """A ticket not yet at the review gate (api 409) becomes a plain `None`."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        """Return the api's not-awaiting-review conflict for the review path."""
+        return httpx.Response(409, json={"detail": "Ticket is not awaiting review"})
+
+    assert _client(handler).fetch_review(3) is None
+
+
 def test_approve_draft_posts_to_the_approve_action() -> None:
     """Approving POSTs the id's approve path and returns the action result."""
     captured: dict[str, Any] = {}
@@ -212,6 +222,18 @@ def test_send_draft_posts_the_rep_marker_and_returns_the_reply() -> None:
     assert captured["json"] == {"rep_id": "rep-1"}
     assert result["status"] == "Resolved"
     assert result["reply"] == "Use the login screen."
+
+
+def test_send_draft_maps_409_to_none_when_nothing_is_staged() -> None:
+    """Sending with no approved/edited draft (api 409) becomes a plain `None`."""
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        """Return the api's nothing-staged conflict for the send path."""
+        return httpx.Response(
+            409, json={"detail": "No draft has been approved or edited for this ticket"}
+        )
+
+    assert _client(handler).send_draft(7, "rep-1") is None
 
 
 def test_reject_draft_posts_the_marker_and_optional_reason() -> None:

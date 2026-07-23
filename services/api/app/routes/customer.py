@@ -54,6 +54,7 @@ async def submit_ticket(
         request.app,
         settings,
         ticket_id=created["id"],
+        reference_code=created["reference_code"],
         message=created["message"],
         attachments=created.get("attachments") or [],
     )

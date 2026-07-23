@@ -92,7 +92,10 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://${LANGFUSE_DB_USER}:${LANGFUSE_DB_PASSWORD}@langfuse-db:5432/${LANGFUSE_DB_NAME}
-      NEXTAUTH_URL: ${LANGFUSE_HOST}
+      # Browser-facing redirect target after login — must be host-reachable, so
+      # LANGFUSE_WEB_URL (localhost), not LANGFUSE_HOST (the in-cluster service name
+      # the api's SDK uses). Same localhost/service-name split as OLLAMA_BASE_URL below.
+      NEXTAUTH_URL: ${LANGFUSE_WEB_URL:-http://localhost:3000}
       NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET}
       SALT: ${LANGFUSE_SALT}
       TELEMETRY_ENABLED: "false"

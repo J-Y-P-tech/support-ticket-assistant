@@ -85,7 +85,14 @@ async def test_start_pipeline_runs_a_submission_to_the_human_gate(test_settings:
     )
     app = _app_with_workflow(graph)
 
-    await start_pipeline(app, test_settings, ticket_id=42, message=_BENIGN_MESSAGE, attachments=[])
+    await start_pipeline(
+        app,
+        test_settings,
+        ticket_id=42,
+        reference_code="TKT-0042",
+        message=_BENIGN_MESSAGE,
+        attachments=[],
+    )
 
     snapshot = graph.get_state(thread_config(42))
     assert snapshot.next == ("human_review",)
@@ -111,4 +118,6 @@ async def test_start_pipeline_swallows_a_pipeline_failure(test_settings: Any) ->
     app = _app_with_workflow(_BoomWorkflow())
 
     # Must return normally despite the raise inside the run.
-    await start_pipeline(app, test_settings, ticket_id=1, message="x", attachments=[])
+    await start_pipeline(
+        app, test_settings, ticket_id=1, reference_code="TKT-0001", message="x", attachments=[]
+    )

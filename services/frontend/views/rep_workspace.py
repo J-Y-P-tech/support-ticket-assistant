@@ -60,8 +60,19 @@ def _render_review_section(client: Any, rows: list[dict[str, Any]]) -> None:
 
 
 def _render_draft_review(client: Any, ticket_id: int) -> None:
-    """Render a paused ticket's message, facts, sources, draft, and rep controls."""
+    """Render a paused ticket's message, facts, sources, draft, and rep controls.
+
+    A ticket that has just been submitted is not yet paused at the human gate — its
+    draft is still being generated — so the api has no review payload for it and
+    `fetch_review` returns `None`. Show a "not ready yet" note rather than crashing.
+    """
     review = client.fetch_review(ticket_id)
+    if review is None:
+        st.info(
+            "This ticket is still being processed — its AI draft isn't ready for review "
+            "yet. Refresh in a moment to pick it up once the draft is prepared."
+        )
+        return
     _render_warning_banners(review)
 
     st.markdown("**Original message**")
@@ -134,7 +145,13 @@ def _render_controls(client: Any, ticket_id: int, edited: str, rep_id: str) -> N
     if st.button("Send to customer", key="rep_send"):
         if rep_id.strip():
             result = client.send_draft(ticket_id, rep_id)
-            st.success(f"Sent — case is now {result['status']}.")
+            if result is None:
+                st.warning(
+                    "Nothing is staged to send yet — press 'Approve as-is' or 'Save edit' "
+                    "to stage the reply first, then Send."
+                )
+            else:
+                st.success(f"Sent — case is now {result['status']}.")
         else:
             st.error("Enter your rep ID before sending.")
 

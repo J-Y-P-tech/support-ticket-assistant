@@ -240,10 +240,18 @@ async def rep_send(
     await record_corpus(
         email, ticket_id=ticket_id, state=final, model=settings.llm_model, rating=payload.rating
     )
-    # Attach the rep's disposition to the ticket's Langfuse trace as scores — draft
-    # accepted, edit distance, rating (SPEC §7.2/§7.4). Best-effort: a ticket that was
-    # never traced (offline run) has no trace id, so nothing is attached.
-    await attach_scores(tracer, email, ticket_id=ticket_id, state=final, rating=payload.rating)
+    # Attach the rep's disposition to the ticket's Langfuse trace: the sending rep as the
+    # trace's user, plus the scores — draft accepted, edit distance, rating (SPEC §7.2/
+    # §7.4). Best-effort: a ticket that was never traced (offline run) has no trace id, so
+    # nothing is attached.
+    await attach_scores(
+        tracer,
+        email,
+        ticket_id=ticket_id,
+        state=final,
+        rating=payload.rating,
+        rep_id=payload.rep_id,
+    )
     return RepActionResult(ticket_id=ticket_id, status=TicketStatus.RESOLVED, reply=reply)
 
 
@@ -273,8 +281,16 @@ async def rep_reject(
     await record_feedback(
         email, ticket_id=ticket_id, state=final, rating=payload.rating, reason=payload.reason
     )
-    # Attach the rejection to the ticket's Langfuse trace as scores (draft not accepted,
-    # rating) — the negative signal the quality trend consumes (SPEC §7.2/§7.4). A ticket
-    # that never drafted (no trace, or a hand-off with no draft) yields no scores.
-    await attach_scores(tracer, email, ticket_id=ticket_id, state=final, rating=payload.rating)
+    # Attach the rejection to the ticket's Langfuse trace: the rejecting rep as the trace's
+    # user, plus the scores (draft not accepted, rating) — the negative signal the quality
+    # trend consumes (SPEC §7.2/§7.4). A ticket that never drafted (no trace, or a hand-off
+    # with no draft) yields no scores.
+    await attach_scores(
+        tracer,
+        email,
+        ticket_id=ticket_id,
+        state=final,
+        rating=payload.rating,
+        rep_id=payload.rep_id,
+    )
     return RepActionResult(ticket_id=ticket_id, status=result_status, reply=None)

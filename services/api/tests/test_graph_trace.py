@@ -136,6 +136,8 @@ def test_build_trace_carries_ticket_id_model_and_ordered_spans() -> None:
     trace = build_trace(_happy_state(), model=_MODEL)
 
     assert trace.ticket_id == 1
+    # No reference_code on this state, so build_trace derives it from the id (TKT-0001).
+    assert trace.reference_code == "TKT-0001"
     assert trace.metadata["model"] == _MODEL
     assert _span_names(trace) == [
         "input_screened",
@@ -145,6 +147,25 @@ def test_build_trace_carries_ticket_id_model_and_ordered_spans() -> None:
         "validated",
         "output_screened",
     ]
+
+
+def test_build_trace_uses_the_stored_reference_code_as_the_trace_key() -> None:
+    """The trace carries the run's stored `TKT-####` code, not one derived from the id.
+
+    The reference code is threaded through the run state and used as the Langfuse trace
+    id (so a rep searches the dashboard by the code they see everywhere else). It is a
+    separate DB sequence from the row id, so the builder must carry the real code, never
+    reconstruct one from `ticket_id`.
+    """
+    from app.graph.trace import build_trace
+
+    state = _happy_state()
+    state["ticket_id"] = 1
+    state["reference_code"] = "TKT-0099"
+
+    trace = build_trace(state, model=_MODEL)
+
+    assert trace.reference_code == "TKT-0099"
 
 
 def test_build_trace_drafted_span_carries_the_redacted_response_body() -> None:
@@ -367,6 +388,7 @@ class _RecordingTracer:
         self._trace_id = trace_id
         self.emitted: list[Any] = []
         self.scored: list[tuple[str, list[Any]]] = []
+        self.users: list[tuple[str, str]] = []
 
     async def emit(self, trace: Any) -> str:
         """Record the trace and return the fixed trace id."""
@@ -376,6 +398,10 @@ class _RecordingTracer:
     async def add_scores(self, trace_id: str, scores: list[Any]) -> None:
         """Record the scores attached under a trace id."""
         self.scored.append((trace_id, scores))
+
+    async def set_user(self, trace_id: str, user_id: str) -> None:
+        """Record the user set on a trace id."""
+        self.users.append((trace_id, user_id))
 
 
 class _RecordingEmail:
@@ -459,10 +485,31 @@ async def test_attach_scores_scores_the_ticket_trace() -> None:
     assert trace_id == "trace-abc"
     names = {score.name for score in scores}
     assert {"draft_accepted", "rating"} <= names
+    # No rep id passed, so the trace's user is left unset.
+    assert tracer.users == []
+
+
+async def test_attach_scores_records_the_handling_rep_as_the_trace_user() -> None:
+    """A rep id passed to `attach_scores` is set as the trace's user (the User column).
+
+    The rep-action routes pass the sending/rejecting rep's marker; it becomes the trace's
+    `user_id` so the Langfuse dashboard names who dispositioned the case (SPEC §7.2).
+    """
+    from app.graph.trace import attach_scores
+
+    tracer = _RecordingTracer()
+    email = _RecordingEmail(trace_id="trace-abc")
+    state = _happy_state()
+    state["rep_decision"] = FeedbackDecision.APPROVED_AS_IS
+    state["final_reply"] = state["draft"].body
+
+    await attach_scores(tracer, email, ticket_id=7, state=state, rating=5, rep_id="rep-1")
+
+    assert tracer.users == [("trace-abc", "rep-1")]
 
 
 async def test_attach_scores_is_a_no_op_when_the_ticket_was_never_traced() -> None:
-    """With no trace id on the ticket (offline run), no scores are attached."""
+    """With no trace id on the ticket (offline run), no scores or user are attached."""
     from app.graph.trace import attach_scores
 
     tracer = _RecordingTracer()
@@ -470,6 +517,7 @@ async def test_attach_scores_is_a_no_op_when_the_ticket_was_never_traced() -> No
     state = _happy_state()
     state["rep_decision"] = FeedbackDecision.REJECTED
 
-    await attach_scores(tracer, email, ticket_id=7, state=state)
+    await attach_scores(tracer, email, ticket_id=7, state=state, rep_id="rep-1")
 
     assert tracer.scored == []
+    assert tracer.users == []

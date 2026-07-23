@@ -62,6 +62,10 @@ class LangfuseTracer:
         """Create the trace, its spans, and its initial scores; flush and return the id."""
         try:
             handle = self._client.trace(
+                # Use the customer-facing TKT-#### code as the trace id so a rep can find a
+                # ticket's trace by typing its reference code into the dashboard's search box
+                # (which matches on id, not tags). Re-emitting the same ticket upserts.
+                id=trace.reference_code,
                 name=trace.name,
                 input=trace.input,
                 metadata=trace.metadata,
@@ -88,6 +92,24 @@ class LangfuseTracer:
             self._client.flush()
         except Exception:
             _logger.exception("langfuse score attachment failed for trace %s", trace_id)
+
+    async def set_user(self, trace_id: str, user_id: str) -> None:
+        """Record the handling rep as the trace's user by id (best-effort)."""
+        await asyncio.to_thread(self._set_user_sync, trace_id, user_id)
+
+    def _set_user_sync(self, trace_id: str, user_id: str) -> None:
+        """Upsert the trace's `user_id` by re-referencing its id, and flush.
+
+        Emitting a trace event carrying only the id and `user_id` merges the user onto
+        the already-emitted trace without disturbing its name, input, or spans — so the
+        dashboard's User column names the rep who dispositioned the case. Swallows any
+        Langfuse error: attribution is best-effort and must never fail the rep action.
+        """
+        try:
+            self._client.trace(id=trace_id, user_id=user_id)
+            self._client.flush()
+        except Exception:
+            _logger.exception("langfuse user attribution failed for trace %s", trace_id)
 
     def _score_all(self, trace_id: str, scores: list[TraceScore]) -> None:
         """Write each score under a deterministic id so a re-send upserts, not duplicates.
