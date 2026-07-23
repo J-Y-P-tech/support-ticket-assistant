@@ -1,0 +1,117 @@
+# CI pipeline (SPEC §12, plan Task 31 / todo Task 33).
+#
+# Mirrors the SPEC §12 stage order as a strictly linear `needs:` chain, so each earlier gate is a
+# hard predecessor of the next: lint -> test -> eval -> security -> build -> deploy. Because the
+# chain is linear, a failing eval or security gate blocks `build` (and, transitively, `deploy`) —
+# a change that regresses either gate can never be built or deployed.
+#
+# The whole pipeline runs model-free (SPEC §10/§12.2): tests use the deterministic fake LLM and the
+# eval gate runs its `--red-team-only` subset, so no Ollama model is downloaded in CI.
+#
+# Per the project working agreement the user owns git/GitHub; this file is written, not run here.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  # Manual trigger for the gated deploy stage (SPEC §12.6).
+  workflow_dispatch:
+
+jobs:
+  # Stage 1 — lint/format/type (SPEC §12.1): ruff, black --check, mypy.
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - name: Install dependencies
+        run: uv sync --frozen
+      - name: Lint (ruff)
+        run: uv run ruff check .
+      - name: Format check (black --check)
+        run: uv run black --check .
+      - name: Type-check (mypy, strict)
+        # Delegate to the canonical Makefile target (its per-service mypy roots are the single
+        # source of truth); print the version first so this step self-documents the tool.
+        run: |
+          uv run mypy --version
+          make typecheck
+
+  # Stage 2 — unit + contract + workflow tests (SPEC §12.2): pytest on the fake LLM, no model.
+  test:
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - name: Install dependencies
+        run: uv sync --frozen
+      - name: Run tests (pytest, fake LLM — no model download)
+        run: uv run pytest
+
+  # Stage 3 — AI eval gate (SPEC §12.3): the red-team suite, model-free.
+  eval:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - name: Install dependencies
+        run: uv sync --frozen
+      - name: Eval gate (red-team only — no Ollama in CI)
+        # The eval runner reuses the api's `app.*` modules; set PYTHONPATH to the api import root so
+        # the step is self-contained (unlike `make eval`, which relies on the caller's environment).
+        # `--red-team-only` runs just the deterministic 100%-block safety gate, needing no model.
+        run: PYTHONPATH=services/api uv run python -m evals.run_eval --red-team-only
+
+  # Stage 4 — security scan (SPEC §12.4): bandit (SAST), pip-audit (deps), gitleaks (secrets),
+  # trivy (filesystem/dependency + Dockerfile misconfig scan; image scanning would move to the
+  # build stage once images are published to a registry).
+  security:
+    needs: eval
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v3
+      - name: SAST (bandit)
+        run: uvx bandit -r services -q
+      - name: Dependency audit (pip-audit)
+        run: uvx pip-audit
+      - name: Secret scan (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+      - name: Vulnerability + misconfig scan (trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          exit-code: "1"
+          severity: CRITICAL,HIGH
+
+  # Stage 5 — build all four service images (SPEC §12.5). Each build uses the repo root as context
+  # (matching docker-compose), so the shared pyproject/uv.lock are in scope.
+  build:
+    needs: security
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build api image
+        run: docker build -f services/api/Dockerfile -t support-ticket-api .
+      - name: Build kb_mcp image
+        run: docker build -f services/kb_mcp/Dockerfile -t support-ticket-kb_mcp .
+      - name: Build email_mcp image
+        run: docker build -f services/email_mcp/Dockerfile -t support-ticket-email_mcp .
+      - name: Build frontend image
+        run: docker build -f services/frontend/Dockerfile -t support-ticket-frontend .
+
+  # Stage 6 — optional gated deploy (SPEC §12.6). Behind the whole chain and a protected
+  # `environment` (manual approval), and only on an explicit manual dispatch — never auto-deploys a
+  # change that failed the eval or security gates. The actual deploy is the user's to wire up.
+  deploy:
+    needs: build
+    if: github.event_name == 'workflow_dispatch'
+    environment: production
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy (placeholder — gated on manual approval)
+        run: echo "All gates green. Deploy step is the user's to configure."

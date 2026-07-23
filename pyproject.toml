@@ -44,6 +44,11 @@ dev = [
     "testcontainers[postgres]>=4,<5",
     # api (Task 4): the email MCP client wrapper is async, so its unit tests are too.
     "pytest-asyncio>=0.24,<1",
+    # ci (Task 33): the CI-workflow structural test parses `.github/workflows/ci.yml`.
+    # PyYAML is already present transitively (langgraph/langfuse); pin it as a direct
+    # dev dependency so that test's `import yaml` is an explicit contract, not a
+    # transitive that a future dependency bump could silently drop.
+    "pyyaml>=6,<7",
 ]
 
 [tool.black]
