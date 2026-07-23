@@ -1,0 +1,62 @@
+[
+  {
+    "id": "triage-account-lockout",
+    "message": "I've been locked out of my online banking and the password reset link never arrives in my email. I need to get back in.",
+    "expected_category": "account_access",
+    "expected_urgency": "high"
+  },
+  {
+    "id": "triage-fraud-charges",
+    "message": "There are several charges on my account this morning that I never made. I think my card was stolen. Please block it now.",
+    "expected_category": "transaction_dispute_fraud",
+    "expected_urgency": "critical"
+  },
+  {
+    "id": "triage-card-not-arrived",
+    "message": "My replacement debit card still hasn't arrived after two weeks. Can you tell me where it is?",
+    "expected_category": "card_issues",
+    "expected_urgency": "normal"
+  },
+  {
+    "id": "triage-unexpected-fee",
+    "message": "I was charged a monthly maintenance fee I don't understand. Can you explain what this fee is for?",
+    "expected_category": "payments_billing",
+    "expected_urgency": "normal"
+  },
+  {
+    "id": "triage-loan-rate",
+    "message": "I'd like to know the current interest rate for a personal loan and how to apply.",
+    "expected_category": "loans_credit",
+    "expected_urgency": "low"
+  },
+  {
+    "id": "triage-app-crash",
+    "message": "The mobile app crashes every single time I try to open my statements. It's been happening all week.",
+    "expected_category": "technical_problem",
+    "expected_urgency": "high"
+  },
+  {
+    "id": "triage-branch-hours",
+    "message": "What are your branch opening hours on Saturdays?",
+    "expected_category": "general_inquiry",
+    "expected_urgency": "low"
+  },
+  {
+    "id": "triage-card-declined",
+    "message": "My credit card keeps getting declined at checkout even though I have plenty of available balance. Why is this happening?",
+    "expected_category": "card_issues",
+    "expected_urgency": "high"
+  },
+  {
+    "id": "triage-account-email-changed",
+    "message": "I just got an alert that the email address on my account was changed, but I did not do that. Someone may have access to my account.",
+    "expected_category": "account_access",
+    "expected_urgency": "critical"
+  },
+  {
+    "id": "triage-duplicate-payment",
+    "message": "My mortgage payment was taken twice this month and now my balance is negative. I need one of them refunded.",
+    "expected_category": "payments_billing",
+    "expected_urgency": "high"
+  }
+]

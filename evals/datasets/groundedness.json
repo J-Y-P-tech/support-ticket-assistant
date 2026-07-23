@@ -1,0 +1,50 @@
+[
+  {
+    "id": "ground-atm-limit",
+    "draft_body": "Thanks for reaching out. Your daily ATM withdrawal limit is $500. If you need a higher limit, a representative can look into options for you.",
+    "sources": [
+      {
+        "id": "kb-atm-limits",
+        "title": "ATM withdrawal limits",
+        "text": "The standard daily ATM withdrawal limit is $500 for personal checking accounts. Customers can request a temporary increase by contacting support."
+      }
+    ],
+    "grounded": true
+  },
+  {
+    "id": "ground-password-reset",
+    "draft_body": "You can reset your password from the login screen by selecting the 'Forgot password' link and following the emailed instructions.",
+    "sources": [
+      {
+        "id": "kb-password-reset",
+        "title": "Resetting your password",
+        "text": "To reset a password, select the 'Forgot password' link on the login screen. A reset link is emailed to the address on file."
+      }
+    ],
+    "grounded": true
+  },
+  {
+    "id": "ground-dispute-guarantee",
+    "draft_body": "We guarantee your dispute will be resolved fully in your favor within 24 hours and your money will be returned tomorrow.",
+    "sources": [
+      {
+        "id": "kb-disputes",
+        "title": "Transaction disputes",
+        "text": "Disputed transactions are investigated and typically reviewed within 10 business days. Outcomes depend on the investigation and are not guaranteed."
+      }
+    ],
+    "grounded": false
+  },
+  {
+    "id": "ground-wire-fee-contradiction",
+    "draft_body": "Good news — there is no fee at all for international wire transfers, so you can send as many as you like for free.",
+    "sources": [
+      {
+        "id": "kb-wire-fees",
+        "title": "Wire transfer fees",
+        "text": "International wire transfers incur a fee of $25 per transfer. Domestic wire transfers incur a fee of $15 per transfer."
+      }
+    ],
+    "grounded": false
+  }
+]

@@ -68,7 +68,8 @@ extend-immutable-calls = ["fastapi.Depends", "fastapi.Security"]
 # as a package by the api route tests (e.g. `from tests.conftest import ...`).
 # `api_client`/`config`/`formatting`/`views` are the frontend's top-level modules (Task 6).
 # `kb_search`/`providers` are kb_mcp's top-level module + package (Task 8).
-known-first-party = ["app", "db", "server", "kb_search", "providers", "tests", "api_client", "config", "formatting", "views"]
+# `evals` is the repo-root eval-suite package (Task 32).
+known-first-party = ["app", "db", "server", "kb_search", "providers", "tests", "api_client", "config", "formatting", "views", "evals"]
 
 [tool.mypy]
 python_version = "3.12"
@@ -124,9 +125,13 @@ disable_error_code = ["type-arg"]
 # Services are independent import roots. Extend this list as tasks add services.
 # services/api provides `app.schemas` (shared contract types the email_mcp and
 # kb_mcp contract tests validate against); services/email_mcp provides `db`/`server`;
-# services/kb_mcp provides `kb_search`/`providers`.
-pythonpath = ["services/api", "services/email_mcp", "services/kb_mcp", "services/frontend"]
-testpaths = ["services"]
+# services/kb_mcp provides `kb_search`/`providers`. The repo root (".") is added so
+# the top-level `evals` package (SPEC §8: golden datasets + eval runner) imports as
+# `evals.*`; the eval runner reuses the api's `app.*` modules, already on this path.
+# The repo root has no `tests/` dir of its own, so it does not merge into the shared
+# `tests` namespace the api route tests import from.
+pythonpath = ["services/api", "services/email_mcp", "services/kb_mcp", "services/frontend", "."]
+testpaths = ["services", "evals"]
 # The api email MCP client is async (SPEC §11); auto mode lets `async def` tests
 # run without a per-test marker.
 asyncio_mode = "auto"

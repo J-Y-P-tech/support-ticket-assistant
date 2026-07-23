@@ -28,12 +28,20 @@ typecheck: ## Static type-check (mypy, strict; per service root)
 	# excluded here — this also keeps the frontend `app.py` module out of the run,
 	# avoiding a clash with the api `app` package.
 	uv run mypy services/frontend/api_client.py services/frontend/config.py services/frontend/formatting.py
+	# Evals (SPEC §8): the runner reuses the api's `app.*` modules (on the mypy path
+	# already). Check the logic modules explicitly, like the frontend line above, so the
+	# `evals/tests` dir (a `tests` namespace) never collides with a service's under mypy.
+	uv run mypy evals/cases.py evals/loader.py evals/runner.py evals/gate.py evals/run_eval.py
 
 test: ## Run the unit/contract/workflow test suite (pytest; fake LLM, no model)
 	uv run pytest
 
-eval: ## Run the AI eval + red-team suites
-	@echo "eval: implemented in Task 29 (evals/ golden + red-team suites)."
+eval: ## Run the AI eval + red-team suites (golden triage/groundedness need host Ollama)
+	# Full gate: red-team suites (deterministic) + golden triage/groundedness against the
+	# host Ollama model. Load .env so config resolves the model tag/URL on a plain host
+	# process (like `migrate`/`export-training-data`). Add `-- --red-team-only` to run just
+	# the model-free red-team gate (no Ollama), e.g. for a CI job without a model.
+	set -a; [ -f .env ] && . ./.env; set +a; uv run python -m evals.run_eval
 
 migrate: ## Apply DB migrations via email_mcp (reads POSTGRES_* from the env/.env)
 	# Load .env into the environment first: migrate.py reads os.environ directly,
