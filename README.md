@@ -5,11 +5,7 @@
 ![Python](https://img.shields.io/badge/python-3.12-blue)
 ![Tests](https://img.shields.io/badge/tests-472%20passing-brightgreen)
 ![Type-checked](https://img.shields.io/badge/mypy-strict-blue)
-
-<!-- Live CI badge — verified reachable, but CI is currently RED (renders "build: failing").
-     Once the CI run on `master` is green, move the line below up into the badge row above.
 ![Build](https://img.shields.io/github/actions/workflow/status/J-Y-P-tech/support-ticket-assistant/ci.yml?branch=master)
--->
 
 
 ![Rep workspace — a drafted reply with its cited KB source, ready for a human to approve, edit, or reject](docs/images/rep-workspace-draft.png)
