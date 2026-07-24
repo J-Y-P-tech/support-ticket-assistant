@@ -224,6 +224,6 @@ License TBD. <!-- No license file yet — add one (e.g. MIT) before sharing publ
 
 ## Contact
 
-**[Your name]** · [LinkedIn](https://www.linkedin.com/in/yordan-n-yurukov/) · [GitHub](https://github.com/J-Y-P-tech)
+[LinkedIn](https://www.linkedin.com/in/yordan-n-yurukov/) · [GitHub](https://github.com/J-Y-P-tech)
 
 
